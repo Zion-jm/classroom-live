@@ -152,6 +152,15 @@ export async function backendRequest(
       "Your session expired. Rejoin the classroom or sign in again.",
     );
   }
+  if (operation.action === "host" && operation.mode === "self") {
+    const capability = await supabase.rpc("classroom_request", {
+      body: { action: "capabilities" },
+    });
+    if (capability.error || !capability.data?.selfPaced)
+      throw new Error(
+        "Install the new self-paced SQL migration (202610240002_self_paced.sql) in Supabase before hosting this mode.",
+      );
+  }
   const { data, error } = await supabase.rpc("classroom_request", {
     body: operation,
   });

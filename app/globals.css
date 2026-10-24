@@ -7,6 +7,139 @@
   --muted: #717b72;
   --border: #dce0d5;
 }
+
+.session-setup {
+  max-width: 600px;
+}
+.session-setup fieldset {
+  border: 0;
+  padding: 0;
+  margin: 25px 0;
+}
+.session-setup legend {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 13px;
+}
+.mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+.mode-option.chosen {
+  border-color: var(--green);
+  background: #eaf0dd;
+}
+.mode-option input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--green);
+  flex-shrink: 0;
+}
+.mode-option strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 7px;
+}
+.mode-option small {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.completion-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 25px;
+  background: #e8efda;
+  border-radius: 12px;
+  min-width: 190px;
+}
+.completion-stat strong {
+  font-size: 32px;
+}
+.completion-stat span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.progress-table {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 30px 0;
+}
+.progress-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1.1fr 0.7fr 1fr;
+  gap: 15px;
+  align-items: center;
+  padding: 18px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.progress-row:last-child {
+  border-bottom: 0;
+}
+.progress-header {
+  background: #e8eddf;
+  font-size: 11px;
+  font-weight: 600;
+}
+.progress-row .pill {
+  justify-self: start;
+  white-space: normal;
+}
+.personal-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+  background: #e5edda;
+  border-radius: 12px;
+  padding: 20px 30px;
+  margin: 15px 0 25px;
+}
+.personal-score strong {
+  font-size: 30px;
+}
+.attempt-review {
+  text-align: left;
+  margin-top: 40px;
+}
+.review-explanation {
+  margin: 20px 0 0;
+}
+@media (max-width: 650px) {
+  .progress-row {
+    gap: 8px;
+    padding: 14px 10px;
+    font-size: 10px;
+    grid-template-columns: 1fr 1fr 0.65fr 1fr;
+  }
+  .progress-row .pill {
+    font-size: 8px;
+    padding: 6px;
+  }
+  .completion-stat {
+    width: 100%;
+  }
+  .session-setup .mode-option {
+    padding: 16px;
+  }
+  .question-meta > strong {
+    max-width: 30%;
+  }
+}
 * {
   box-sizing: border-box;
 }

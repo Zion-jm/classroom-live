@@ -1,5 +1,21 @@
 # Local implementation status — October 24, 2026
 
+## Self-paced upgrade
+
+- [x] Session setup with teacher-paced/self-paced selection and per-question/end-of-attempt feedback.
+- [x] Independent student question state, authoritative deadlines, locked submissions, and Next/Finish controls in both local and cloud code.
+- [x] Teacher progress dashboard, automatic completion, early session closure, full personal reviews, final rankings, and CSV compatibility.
+- [x] Incremental migration 002 preserves existing quizzes, teacher sessions, access policies, and the Cron command.
+- [x] Database capability check blocks self-paced hosting before the upgrade is installed.
+- [x] Thirteen automated tests pass, including both migrations, teacher-mode regression, self-paced privacy, independent progress, timeout, early finishing, and 50-member self-paced closure.
+- [x] Local self-paced HTTP checks pass for both feedback options, including progression, hidden score/key before finish, personal review, early closure, and CSV.
+- [x] Browser check covers mode selection, self-paced lobby, teacher progress, student timeout, independent Next, Finish, and final answer review.
+- [x] Supabase-mode production build passes during implementation.
+- [ ] User applies migration 002 to the hosted project and rehearses both feedback options there.
+- [ ] Updated commit pushed and Vercel deployment verified.
+
+See SELF_PACED_UPGRADE.md for the exact upgrade sequence. These implementation checks do not claim the hosted migration or rollout has already happened.
+
 ## Completed local milestone
 
 - [x] Next.js / TypeScript project with dependency lockfile and ignore rules.

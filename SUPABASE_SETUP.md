@@ -1,5 +1,7 @@
 # Supabase setup — follow in this order
 
+**Already installed migration 001?** For the new self-paced feature, follow SELF_PACED_UPGRADE.md and run only migration 002. Do not reinstall the original database.
+
 The integration code is ready for configuration. Running the application in local mode still uses `.local/database.json`. Supabase mode uses a separate database; local quizzes and results do not transfer automatically.
 
 No service-role key or database password is required by this application. Only the Supabase URL and publishable key are used in the browser. PostgreSQL verifies each signed identity and authorizes every action.
@@ -13,6 +15,8 @@ No service-role key or database password is required by this application. Only t
 5. Copy the entire file, including `begin;` and `commit;`, into the SQL editor.
 6. Click **Run**. You should receive a success result.
 7. If an error appears, stop and share the error text. Do not run fragments or drop tables to work around it.
+
+8. For a new installation, run `supabase/migrations/202610240002_self_paced.sql` in a separate query after the first migration succeeds. This enables self-paced sessions and both feedback options. Run each migration only once after success.
 
 Run the initial migration once. It is transactional: a failure rolls the installation back. A second run after success will report existing objects; do not reset the database. Future changes should use new migrations.
 

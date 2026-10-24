@@ -11,6 +11,7 @@ import {
   snapshot,
   reconcile,
   rankings,
+  nextSelf,
 } from "../../../lib/engine.mjs";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -151,6 +152,14 @@ export async function POST(req: NextRequest) {
         submit(r, p.id, body.questionId, body.choice);
         return snapshot(r, p.id);
       }
+      if (body.action === "next_self") {
+        const r = roomFor(db, body.code);
+        const p = playerFor(req, r);
+        if (r.mode !== "self")
+          throw new GameError("This is not a self-paced session.");
+        nextSelf(r, p.id, body.questionId);
+        return snapshot(r, p.id);
+      }
       requireAdmin(req);
       if (body.action === "save") {
         const quiz = {
@@ -170,8 +179,10 @@ export async function POST(req: NextRequest) {
       if (body.action === "host") {
         const q = db.quizzes.find((q: any) => q.id === body.id);
         if (!q) throw new GameError("Quiz not found.", 404);
-        let r = createRoom(q);
-        while (db.rooms.some((x: any) => x.code === r.code)) r = createRoom(q);
+        const options = { mode: body.mode, feedback: body.feedback };
+        let r = createRoom(q, Date.now(), options);
+        while (db.rooms.some((x: any) => x.code === r.code))
+          r = createRoom(q, Date.now(), options);
         db.rooms.push(r);
         return { code: r.code };
       }
@@ -189,7 +200,7 @@ export async function POST(req: NextRequest) {
             .replaceAll('"', '""') +
           '"';
         const count =
-          room.phase === "FINISHED"
+          room.phase === "FINISHED" || room.mode === "self"
             ? room.quiz.questions.length
             : snapshot(room, null, true).revealedCount;
         const rows = [

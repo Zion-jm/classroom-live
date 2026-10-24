@@ -2,6 +2,12 @@
 
 A host-controlled classroom quiz application built with Next.js and TypeScript. It supports local file storage for development and Supabase PostgreSQL/Auth/Realtime for the cloud. Start with local mode, or follow [SUPABASE_SETUP.md](SUPABASE_SETUP.md) to configure cloud mode.
 
+## Session modes
+
+**Host quiz** now opens session setup. Choose **Teacher-paced** for the original shared progression, or **Self-paced** for individual timers and student Next/Finish controls. Self-paced feedback can reveal after every question or after the student finishes all questions. Early finishers see their own review; class rankings wait for session completion. The teacher has a progress dashboard and can close remaining attempts early.
+
+Existing Supabase installations must apply migration **002 once**, following [SELF_PACED_UPGRADE.md](SELF_PACED_UPGRADE.md). Do not rerun the original migration. Local mode supports both options immediately. The upgrade guide includes hosted verification and deployment commands.
+
 ## Supabase integration
 
 The database migration, teacher allowlist setup, Cron timer setup, browser Auth, private live subscriptions, and fallback synchronization are implemented. The app stays in local mode until `NEXT_PUBLIC_BACKEND=supabase` is configured and the server is restarted. Follow the setup guide before changing this setting. Local quizzes do not transfer automatically.

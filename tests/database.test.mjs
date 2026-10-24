@@ -31,6 +31,15 @@ test("Supabase migration: role isolation, complete 50-player game, deadlines, ra
         "utf8",
       ),
     );
+    await db.exec(
+      await readFile(
+        new URL(
+          "../supabase/migrations/202610240002_self_paced.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
     const teacher = randomUUID(),
       otherTeacher = randomUUID();
     const students = Array.from({ length: 51 }, () => randomUUID());
@@ -332,6 +341,171 @@ test("Supabase migration: role isolation, complete 50-player game, deadlines, ra
       (await rpc(teacher, { action: "export", code: lobby.code })).state.phase,
       "CANCELLED",
     );
+    const selfQuiz = (
+      await rpc(teacher, {
+        action: "save",
+        quiz: {
+          title: "Self-paced verification",
+          questions: [question, { ...question, prompt: "Question two" }],
+        },
+      })
+    ).quiz;
+    await assert.rejects(
+      rpc(teacher, { action: "host", id: selfQuiz.id, mode: "invalid" }),
+      /valid session/,
+    );
+    for (const feedback of ["each", "end"]) {
+      const c = (
+        await rpc(teacher, {
+          action: "host",
+          id: selfQuiz.id,
+          mode: "self",
+          feedback,
+        })
+      ).code;
+      const cohort =
+        feedback === "end" ? students.slice(0, 50) : students.slice(0, 2);
+      for (const [i, id] of cohort.entries())
+        await rpc(id, { action: "join", code: c, name: `Self ${i}` });
+      let h = await rpc(teacher, {
+        action: "snapshot",
+        code: c,
+        hosting: true,
+      });
+      assert.equal(h.mode, "self");
+      h = await rpc(teacher, {
+        action: "start",
+        code: c,
+        revision: h.revision,
+      });
+      assert.equal(h.phase, "RUNNING");
+      let first = await rpc(cohort[0], { action: "snapshot", code: c });
+      const firstId = first.question.id;
+      assert.equal(first.question.correct, undefined);
+      assert.deepEqual(first.review, []);
+      await assert.rejects(
+        rpc(cohort[0], { action: "next_self", code: c, questionId: firstId }),
+        /Submit/,
+      );
+      await assert.rejects(
+        rpc(students[50], { action: "snapshot", code: c }),
+        /session/,
+      );
+      await assert.rejects(
+        rpc(cohort[0], {
+          action: "close_session",
+          code: c,
+          revision: h.revision,
+        }),
+        /do not own/,
+      );
+      first = await rpc(cohort[0], {
+        action: "answer",
+        code: c,
+        questionId: firstId,
+        choice: 0,
+      });
+      assert.equal(first.question.correct, feedback === "each" ? 0 : undefined);
+      assert.equal(first.score, feedback === "each" ? 1 : null);
+      assert.deepEqual(first.review, []);
+      first = await rpc(cohort[0], {
+        action: "answer",
+        code: c,
+        questionId: firstId,
+        choice: 1,
+      });
+      assert.equal(first.ownAnswer, 0);
+      first = await rpc(cohort[0], {
+        action: "next_self",
+        code: c,
+        questionId: firstId,
+      });
+      assert.equal(first.index, 1);
+      assert.equal(
+        (await rpc(cohort[1], { action: "snapshot", code: c })).index,
+        0,
+      );
+      await assert.rejects(
+        rpc(cohort[0], { action: "next_self", code: c, questionId: firstId }),
+        /no longer/,
+      );
+      first = await rpc(cohort[0], {
+        action: "answer",
+        code: c,
+        questionId: first.question.id,
+        choice: 0,
+      });
+      first = await rpc(cohort[0], {
+        action: "next_self",
+        code: c,
+        questionId: first.question.id,
+      });
+      assert.equal(first.phase, "ATTEMPT_FINISHED");
+      assert.equal(first.score, 2);
+      assert.equal(first.review.length, 2);
+      assert.deepEqual(first.leaderboard, []);
+      const unfinished = await rpc(cohort[1], { action: "snapshot", code: c });
+      assert.equal(unfinished.phase, "QUESTION_OPEN");
+      assert.deepEqual(unfinished.review, []);
+      assert.equal(unfinished.question.correct, undefined);
+      await db.exec("reset role");
+      await db.query(
+        "update classroom_private.attempts set deadline=1 where room_id=(select id from classroom_private.rooms where code=$1) and player_id=(select id from classroom_private.players where user_id=$2 and room_id=(select id from classroom_private.rooms where code=$1))",
+        [c, cohort[1]],
+      );
+      await db.query("select classroom_private.expire_questions()");
+      const timed = await rpc(cohort[1], { action: "snapshot", code: c });
+      assert.equal(
+        timed.phase,
+        feedback === "each" ? "ANSWER_REVEALED" : "QUESTION_LOCKED",
+      );
+      assert.equal(timed.ownAnswer, null);
+      await assert.rejects(
+        rpc(cohort[1], {
+          action: "answer",
+          code: c,
+          questionId: timed.question.id,
+          choice: 0,
+        }),
+        /locked/,
+      );
+      let second = await rpc(cohort[1], {
+        action: "next_self",
+        code: c,
+        questionId: timed.question.id,
+      });
+      second = await rpc(cohort[1], {
+        action: "answer",
+        code: c,
+        questionId: second.question.id,
+        choice: 0,
+      });
+      second = await rpc(cohort[1], {
+        action: "next_self",
+        code: c,
+        questionId: second.question.id,
+      });
+      if (feedback === "each") assert.equal(second.phase, "FINISHED");
+      else {
+        // A 50-player room can close with mixed independent progress.
+        h = await rpc(teacher, { action: "snapshot", code: c, hosting: true });
+        assert.equal(h.finishedCount, 2);
+        assert.equal(h.progress.length, 50);
+        h = await rpc(teacher, {
+          action: "close_session",
+          code: c,
+          revision: h.revision,
+        });
+        assert.equal(h.phase, "FINISHED");
+        const closed = await rpc(cohort[2], { action: "snapshot", code: c });
+        assert.equal(closed.score, 0);
+        assert.equal(closed.review.length, 2);
+        assert.equal(closed.leaderboard.length, 50);
+      }
+      const finalExport = await rpc(teacher, { action: "export", code: c });
+      assert.equal(finalExport.questions.length, 2);
+      assert.equal(finalExport.state.leaderboard[0].score, 2);
+    }
     await db.exec("reset role; set role anon");
     await assert.rejects(
       db.query("select public.classroom_request('{}')"),

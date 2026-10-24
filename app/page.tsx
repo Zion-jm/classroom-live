@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import SelfSession from "./components/SelfSession";
 import {
   backendRequest,
   cloudMode,
@@ -48,6 +49,9 @@ export default function Home() {
   const lastQuestion = useRef("");
   const lastState = useRef({ code: "", revision: -1 });
   const [preview, setPreview] = useState(false);
+  const [hostId, setHostId] = useState<string | undefined>();
+  const [mode, setMode] = useState("teacher");
+  const [feedback, setFeedback] = useState("end");
   async function request(body?: any, query = "", authToken = token) {
     return backendRequest(body, query, authToken);
   }
@@ -208,7 +212,7 @@ export default function Home() {
     setView(view);
   }
   async function hostQuiz(id?: string) {
-    const r = await request({ action: "host", id });
+    const r = await request({ action: "host", id, mode, feedback });
     setCode(r.code);
     setRoom(null);
     go("host");
@@ -526,7 +530,12 @@ export default function Home() {
                       <button
                         className="primary"
                         disabled={busy}
-                        onClick={() => run(() => hostQuiz(q.id))}
+                        onClick={() => {
+                          setHostId(q.id);
+                          setMode("teacher");
+                          setFeedback("end");
+                          go("setup");
+                        }}
                       >
                         Host quiz ↗
                       </button>
@@ -606,6 +615,109 @@ export default function Home() {
               </div>
             )}
           </>
+        )}
+        {view === "setup" && (
+          <section className="narrow session-setup">
+            <button className="text-button" onClick={leave}>
+              ← Your quizzes
+            </button>
+            <div className="eyebrow">MAKE IT YOUR SESSION</div>
+            <h1>
+              Choose the <em>pace.</em>
+            </h1>
+            <p>{quizzes.find((q) => q.id === hostId)?.title}</p>
+            <fieldset>
+              <legend>How should students progress?</legend>
+              <label
+                className={`mode-option ${mode === "teacher" ? "chosen" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="mode"
+                  value="teacher"
+                  checked={mode === "teacher"}
+                  onChange={() => setMode("teacher")}
+                />
+                <span>
+                  <strong>Teacher-paced</strong>
+                  <small>
+                    You control each question, answer reveal, and next step.
+                  </small>
+                </span>
+              </label>
+              <label
+                className={`mode-option ${mode === "self" ? "chosen" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="mode"
+                  value="self"
+                  checked={mode === "self"}
+                  onChange={() => setMode("self")}
+                />
+                <span>
+                  <strong>Self-paced</strong>
+                  <small>
+                    Start once. Students answer and move ahead independently.
+                  </small>
+                </span>
+              </label>
+            </fieldset>
+            {mode === "self" && (
+              <fieldset>
+                <legend>When should answers appear?</legend>
+                <label
+                  className={`mode-option ${feedback === "each" ? "chosen" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="feedback"
+                    checked={feedback === "each"}
+                    onChange={() => setFeedback("each")}
+                  />
+                  <span>
+                    <strong>After each question</strong>
+                    <small>
+                      Show correctness and explanation after submission or
+                      timeout.
+                    </small>
+                  </span>
+                </label>
+                <label
+                  className={`mode-option ${feedback === "end" ? "chosen" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="feedback"
+                    checked={feedback === "end"}
+                    onChange={() => setFeedback("end")}
+                  />
+                  <span>
+                    <strong>After finishing the quiz</strong>
+                    <small>
+                      Hide scores and answers until that student finishes. Then
+                      show their complete review.
+                    </small>
+                  </span>
+                </label>
+                <p className="small">
+                  An early finisher can review answers while classmates are
+                  still answering.
+                </p>
+              </fieldset>
+            )}
+            <button
+              className="primary full"
+              disabled={busy}
+              onClick={() => run(() => hostQuiz(hostId))}
+            >
+              Create lobby →
+            </button>
+            <p className="small">
+              Mode and feedback are fixed for this session. Students join the
+              lobby before you start.
+            </p>
+          </section>
         )}
         {view === "editor" && (
           <>
@@ -889,6 +1001,11 @@ export default function Home() {
                   )}
                 </h1>
                 <p>{room.title}</p>
+                <p className="small">
+                  {room.mode === "self"
+                    ? `Self-paced · Answers ${room.feedback === "each" ? "after each question" : "after finishing the quiz"}`
+                    : "Teacher-paced · Your teacher controls the next question"}
+                </p>
                 {host ? (
                   <div className="room-code">
                     <span>JOIN WITH THIS CODE</span>
@@ -963,6 +1080,48 @@ export default function Home() {
                   </button>
                 )}
               </section>
+            ) : room.mode === "self" ? (
+              <SelfSession
+                room={room}
+                host={host}
+                seconds={seconds}
+                selection={selection}
+                busy={busy}
+                online={online}
+                onSelect={setSelection}
+                onAnswer={() =>
+                  run(async () =>
+                    acceptRoom(
+                      await request({
+                        action: "answer",
+                        code,
+                        questionId: room.question.id,
+                        choice: selection,
+                      }),
+                    ),
+                  )
+                }
+                onNext={() =>
+                  run(async () =>
+                    acceptRoom(
+                      await request({
+                        action: "next_self",
+                        code,
+                        questionId: room.question.id,
+                      }),
+                    ),
+                  )
+                }
+                onClose={() => {
+                  if (
+                    confirm(
+                      "Close this session for everyone? Remaining unanswered questions receive zero points.",
+                    )
+                  )
+                    void run(() => control("close_session"));
+                }}
+                onExport={() => run(exportCSV)}
+              />
             ) : room.phase === "CANCELLED" ? (
               <section className="narrow">
                 <h1>
@@ -1169,23 +1328,25 @@ export default function Home() {
                 )}
               </section>
             )}
-            {host && !["FINISHED", "CANCELLED"].includes(room.phase) && (
-              <div className="end-session">
-                <button
-                  className="danger-text"
-                  onClick={() => {
-                    if (
-                      confirm(
-                        "End this session early? It will be saved as incomplete.",
+            {host &&
+              (room.mode !== "self" || room.phase === "LOBBY") &&
+              !["FINISHED", "CANCELLED"].includes(room.phase) && (
+                <div className="end-session">
+                  <button
+                    className="danger-text"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          "End this session early? It will be saved as incomplete.",
+                        )
                       )
-                    )
-                      void run(() => control("cancel"));
-                  }}
-                >
-                  End session
-                </button>
-              </div>
-            )}
+                        void run(() => control("cancel"));
+                    }}
+                  >
+                    End session
+                  </button>
+                </div>
+              )}
           </>
         )}
       </div>
