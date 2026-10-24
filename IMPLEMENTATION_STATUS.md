@@ -21,10 +21,14 @@ The automated 50-session HTTP check runs on this computer. It is not proof of Su
 
 ## Deliberately deferred to cloud integration
 
-- [ ] Supabase accounts/project configuration, database migrations and SQL game operations.
-- [ ] Supabase admin and anonymous player Auth, RLS, private Realtime authorization.
-- [ ] Realtime transport replacing 750 ms local polling.
-- [ ] Supabase Cron autonomous expiration and recovery checks.
+- [x] Supabase SQL migration and atomic game operations written and tested locally against PostgreSQL.
+- [x] Teacher and anonymous player Auth integration, RLS/no direct table access, membership-authorized private Realtime policy implemented.
+- [x] Private Realtime transport with reconnect snapshots, deadline refresh, event coalescing, fallback reads, and backoff implemented.
+- [x] Cron setup SQL and database-time expiration function implemented; expiration function tested locally.
+- [x] Read-only project connectivity check passed with configured publishable credentials.
+- [ ] User runs migration/timer SQL and configures hosted Auth, teacher access, and private Realtime.
+- [ ] Hosted Auth, private-channel delivery, and autonomous Cron verified in the real project.
+- [ ] Local app switched to Supabase mode after setup succeeds.
 - [ ] Image uploads and Storage policies.
 - [ ] Incomplete draft saving, retention, rate limits, advanced presence, and production hardening.
 - [ ] Vercel configuration and hosted deployment.
@@ -32,3 +36,9 @@ The automated 50-session HTTP check runs on this computer. It is not proof of Su
 - [ ] Full cloud and classroom-network rehearsal with 50 students.
 
 See README.md for run instructions and local adapter limits. The original implementation plan remains the complete release checklist; this milestone does not mark the production phases complete.
+
+## Supabase implementation details
+
+Private relational tables store teacher allowlists, quiz documents, rooms, memberships, and per-player submissions. Quiz questions/choices and immutable room snapshots use JSONB for the current fixed question type. Unique answer keys, room-row locks, owner checks, revision preconditions, and database-time checks enforce gameplay. Repeated answer retries return the first accepted answer; repeated admin transitions fail stale revision checks rather than advancing twice. Future high-volume or per-question analytics may warrant normalizing quiz documents further.
+
+Auth and Realtime service interfaces are mocked only in the embedded PostgreSQL test. This verifies SQL execution/authorization logic, not the provider's JWT validation, actual WebSocket authorization, Cron extension scheduling, or production load. Anonymous sign-in limits on shared classroom Wi-Fi must be configured and rehearsed.

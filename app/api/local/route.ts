@@ -56,6 +56,11 @@ function failure(e: unknown) {
   );
 }
 export async function GET(req: NextRequest) {
+  if (process.env.VERCEL || process.env.NEXT_PUBLIC_BACKEND === "supabase")
+    return NextResponse.json(
+      { error: "Local API is disabled in cloud mode." },
+      { status: 404 },
+    );
   try {
     const code = req.nextUrl.searchParams.get("code");
     const admin = isAdmin(req);
@@ -96,6 +101,11 @@ export async function GET(req: NextRequest) {
   }
 }
 export async function POST(req: NextRequest) {
+  if (process.env.VERCEL || process.env.NEXT_PUBLIC_BACKEND === "supabase")
+    return NextResponse.json(
+      { error: "Local API is disabled in cloud mode." },
+      { status: 404 },
+    );
   try {
     // Next's internal URL can use 0.0.0.0 while the browser uses localhost
     // or a LAN address. Compare the actual request Host, not the bind address.

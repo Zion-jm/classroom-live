@@ -1,6 +1,12 @@
 # Classroom Live
 
-A locally runnable, host-controlled classroom quiz application built with Next.js and TypeScript. The production target is Vercel + Supabase; no accounts or hosted resources are required for this local milestone.
+A host-controlled classroom quiz application built with Next.js and TypeScript. It supports local file storage for development and Supabase PostgreSQL/Auth/Realtime for the cloud. Start with local mode, or follow [SUPABASE_SETUP.md](SUPABASE_SETUP.md) to configure cloud mode.
+
+## Supabase integration
+
+The database migration, teacher allowlist setup, Cron timer setup, browser Auth, private live subscriptions, and fallback synchronization are implemented. The app stays in local mode until `NEXT_PUBLIC_BACKEND=supabase` is configured and the server is restarted. Follow the setup guide before changing this setting. Local quizzes do not transfer automatically.
+
+Run `npm run check:supabase` for a read-only project connectivity check. `npm test` includes the main SQL migration executed against embedded PostgreSQL with simulated Supabase service interfaces. Actual hosted Auth, private Realtime, Cron, and classroom capacity still need verification after dashboard setup.
 
 ## Run locally
 
@@ -53,13 +59,13 @@ Other devices on the same trusted network can use `http://YOUR-COMPUTER-LAN-IP:3
 
 ## Local adapter limitations
 
-- Synchronization uses 750 ms polling, not Supabase Realtime. It is designed for local functional testing, not measured classroom capacity.
+- Local mode synchronization uses 750 ms polling. Supabase mode uses private Realtime notifications, snapshot recovery, and fallback reads. Neither mode's classroom capacity is guaranteed without a deployment/network rehearsal.
 - Data lives in `.local/database.json`. This contains sensitive session credentials; do not commit or share it. Tests use separate in-memory fixtures.
 - The filesystem adapter supports one Node server process. Do not run dev and production servers against the same data directory simultaneously.
 - Expiration is reconciled on the next server request. A browser locks at its countdown deadline and the server always rejects late answers; a durable autonomous scheduler comes with Supabase.
 - No rate-limiting service, password recovery, persistent upload storage, online presence tracking, or automated retention is configured yet.
-- Images, incomplete quiz drafts, and production Supabase authorization/migrations remain in the next milestones.
-- Administrator authentication is a local password gate; production will use Supabase Auth with explicit admin role authorization.
+- Images and incomplete quiz drafts remain in later milestones. Supabase authorization/migrations are now supplied; project installation and hosted verification remain pending.
+- Local mode uses a password gate. Supabase mode uses email/password Auth and an owner-managed teacher allowlist; its local filesystem API is disabled.
 - Browser sessions hold reconnect credentials. Clearing browser data creates a new session and cannot reclaim a taken player name.
 - The free-tier 50-player target is not verified by the engine's 50-player test. A real network load test is still required.
 - Google Fonts is an optional network enhancement; system fonts provide an offline fallback.
@@ -72,19 +78,18 @@ Other devices on the same trusted network can use `http://YOUR-COMPUTER-LAN-IP:3
 - `lib/store.ts`: single-process local persistence; explicitly refuses to run on Vercel.
 - `tests/engine.test.mjs`: timing, ranking, validation, privacy, and progression checks.
 
-## Next milestone: Supabase and Vercel
+## Cloud rollout checklist
 
-1. Provision the user-owned Supabase project and Vercel application.
-2. Introduce SQL migrations for quizzes, questions, choices, rooms, player memberships, answers, and command IDs.
-3. Replace local transactions with atomic PostgreSQL functions enforcing authorization, revisions, and database-time deadlines.
-4. Replace the local password with Supabase admin Auth and player tokens with anonymous Auth memberships.
-5. Add row-level security, private room Broadcast authorization, and sanitized committed events.
-6. Replace polling with Realtime plus snapshot recovery and fallback polling.
-7. Add Supabase Cron expiration and Storage uploads with validation.
-8. Implement abuse controls, retention, exports/backups, and complete production security checks.
-9. Run the 50-player classroom rehearsal, then deploy.
+1. Run the supplied migration and timer setup in the user-owned Supabase project.
+2. Enable anonymous Auth, review shared-IP rate limits, create the teacher account, and run its authorization SQL.
+3. Configure private Realtime and activate Supabase mode as described in the setup guide.
+4. Verify hosted identity, ownership, privacy, deadlines, event delivery, and reconnects locally against Supabase.
+5. Decide public-sign-in abuse protection and retention/backup procedures before wider rollout.
+6. Review/push code and deploy Vercel with the three documented environment variables.
+7. Run the deployed 50-player classroom rehearsal before class use.
+8. Add optional Storage uploads and draft persistence in a later feature milestone.
 
-Do not deploy the local adapter to Vercel. No cloud accounts, database credentials, deployment, or GitHub push have been performed in this milestone.
+Do not deploy the local adapter to Vercel. Cloud mode calls database functions directly with authenticated user JWTs and requires no secret/service-role key. No dashboard migration, teacher creation, cloud deployment, or new GitHub push is performed automatically by these files.
 
 ## GitHub preparation
 

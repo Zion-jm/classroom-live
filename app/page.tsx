@@ -1,5 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import {
+  backendRequest,
+  cloudMode,
+  playerStorageKey,
+  subscribeRoom,
+} from "../lib/backend";
 type Question = {
   prompt: string;
   choices: string[];
@@ -28,6 +34,8 @@ export default function Home() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [live, setLive] = useState(false);
   const [token, setToken] = useState("");
   const [playerId, setPlayerId] = useState("");
   const [error, setError] = useState("");
@@ -41,18 +49,7 @@ export default function Home() {
   const lastState = useRef({ code: "", revision: -1 });
   const [preview, setPreview] = useState(false);
   async function request(body?: any, query = "", authToken = token) {
-    const response = await fetch(`/api/local${query}`, {
-      method: body ? "POST" : "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "x-player-token": authToken,
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-      cache: "no-store",
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Request failed.");
-    return data;
+    return backendRequest(body, query, authToken);
   }
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -92,7 +89,7 @@ export default function Home() {
   }
   useEffect(() => {
     void dashboard().catch(() => {});
-    const saved = sessionStorage.getItem("classroom-player");
+    const saved = sessionStorage.getItem(playerStorageKey);
     if (saved) {
       try {
         const p = JSON.parse(saved);
@@ -113,26 +110,75 @@ export default function Home() {
     if (!["host", "player"].includes(view) || !code) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
+    let eventTimer: ReturnType<typeof setTimeout>;
+    let inFlight = false;
+    let pending = false;
+    let subscribed = false;
+    let failures = 0;
+    setLive(false);
     async function poll() {
+      if (!active) return;
+      if (inFlight) {
+        pending = true;
+        return;
+      }
+      clearTimeout(timer);
+      inFlight = true;
+      let nextDelay = cloudMode ? (subscribed ? 10000 : 2000) : 750;
       try {
         const r = await request(
           undefined,
           `?code=${encodeURIComponent(code)}${view === "host" ? "&host=1" : ""}`,
         );
-        if (active) acceptRoom(r);
+        if (active) {
+          acceptRoom(r);
+          failures = 0;
+          if (r.phase === "QUESTION_OPEN")
+            nextDelay = Math.min(
+              nextDelay,
+              Math.max(150, r.deadline - r.serverNow + 100),
+            );
+        }
       } catch (e) {
         if (active) {
           setOnline(false);
           setError((e as Error).message);
+          failures++;
+          nextDelay = Math.min(30000, 2000 * 2 ** Math.min(failures, 4));
         }
       } finally {
-        if (active) timer = setTimeout(poll, 750);
+        inFlight = false;
+        if (active) {
+          timer = setTimeout(poll, pending ? 80 : nextDelay);
+          pending = false;
+        }
       }
     }
     void poll();
+    const unsubscribe = subscribeRoom(
+      code,
+      view === "host",
+      () => {
+        clearTimeout(eventTimer);
+        eventTimer = setTimeout(poll, 80);
+      },
+      (connected) => {
+        subscribed = connected;
+        if (active) setLive(connected);
+      },
+    );
+    const refresh = () => {
+      if (!document.hidden) void poll();
+    };
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       active = false;
       clearTimeout(timer);
+      clearTimeout(eventTimer);
+      unsubscribe();
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
     };
   }, [view, code, token]);
   useEffect(() => {
@@ -216,7 +262,9 @@ export default function Home() {
           classroom<span className="brand-live">live</span>
         </button>
         <div className="top-actions">
-          <span className="local-badge">LOCAL WORKSPACE</span>
+          <span className="local-badge">
+            {cloudMode ? "LIVE CLASSROOM" : "LOCAL WORKSPACE"}
+          </span>
           {admin && (
             <button
               className="text-button"
@@ -343,7 +391,7 @@ export default function Home() {
                 e.preventDefault();
                 void run(async () => {
                   const p = await request({ action: "join", code, name });
-                  sessionStorage.setItem("classroom-player", JSON.stringify(p));
+                  sessionStorage.setItem(playerStorageKey, JSON.stringify(p));
                   setToken(p.token);
                   setPlayerId(p.playerId);
                   setCode(p.code);
@@ -395,12 +443,26 @@ export default function Home() {
               onSubmit={(e) => {
                 e.preventDefault();
                 void run(async () => {
-                  await request({ action: "login", password });
+                  await request({ action: "login", email, password });
+                  setPassword("");
                   await dashboard();
                   go("dashboard");
                 });
               }}
             >
+              {cloudMode && (
+                <label>
+                  Teacher email
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="username"
+                    placeholder="Your authorized teacher email"
+                  />
+                </label>
+              )}
               <label>
                 Admin password
                 <input
@@ -416,8 +478,9 @@ export default function Home() {
               </button>
             </form>
             <p className="small">
-              Local development password: <code>classroom-local</code>. Set
-              LOCAL_ADMIN_PASSWORD in .env.local to change it.
+              {cloudMode
+                ? "Use the teacher account created in Supabase and authorized by your project owner. Students join without an email or password."
+                : "Use your locally configured administrator password."}
             </p>
           </section>
         )}
@@ -794,7 +857,14 @@ export default function Home() {
                 ← {host ? "Dashboard" : "Home"}
               </button>
               <span className={`connection ${online ? "" : "offline"}`}>
-                ● {online ? "Connected · local sync" : "Reconnecting…"}
+                ●{" "}
+                {online
+                  ? cloudMode
+                    ? live
+                      ? "Live connection"
+                      : "Connected · checking updates"
+                    : "Connected · local sync"
+                  : "Reconnecting…"}
               </span>
               <span className="pill">ROOM {room.code}</span>
             </div>
@@ -1122,8 +1192,9 @@ export default function Home() {
       <footer className="footer">
         <span>classroom live</span>
         <span>
-          Local development · saved on this computer · Supabase connection comes
-          next
+          {cloudMode
+            ? "One question at a time. Everyone together."
+            : "Local development · saved on this computer"}
         </span>
       </footer>
     </main>
