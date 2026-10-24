@@ -34,6 +34,12 @@ const blankQuestion = (): Question => ({
 });
 const freshQuiz = (): Quiz => ({ title: "", questions: [blankQuestion()] });
 const letters = ["A", "B", "C", "D", "E", "F"];
+function draftSavedAt(value: string | number) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Saved draft"
+    : `Saved ${date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
+}
 export default function Home() {
   const [view, setView] = useState("home");
   const [admin, setAdmin] = useState(false);
@@ -650,45 +656,99 @@ export default function Home() {
                 </article>
               ))}
             </div>
-            <div className="section-title history-title">
-              Private drafts <span>Resume unfinished work</span>
-            </div>
-            {!draftList.length ? (
-              <p className="small">Drafts appear here after autosave.</p>
-            ) : (
-              <div className="history">
-                {draftList.map((d) => (
-                  <div className="draft-list-row" key={d.id}>
-                    <button
-                      className="text-button"
-                      onClick={() => run(() => resumeDraft(d.id))}
-                    >
-                      {d.title || "Untitled draft"} · {d.kind} · Resume →
-                    </button>
-                    <button
-                      className="danger-text"
-                      onClick={() => {
-                        if (
-                          confirm(
-                            "Discard this cloud draft? Your published quizzes stay unchanged.",
-                          )
-                        )
-                          void run(async () => {
-                            await request({
-                              action: "draft_discard",
-                              id: d.id,
-                              revision: d.revision,
-                            });
-                            await dashboard();
-                          });
-                      }}
-                    >
-                      Discard
-                    </button>
-                  </div>
-                ))}
+            <section
+              className="drafts-section"
+              aria-labelledby="private-drafts-title"
+            >
+              <div className="drafts-heading">
+                <div className="drafts-heading-title">
+                  <h2 id="private-drafts-title">Private drafts</h2>
+                  <span className="draft-count">{draftList.length}</span>
+                </div>
+                <p>Pick up where you left off.</p>
               </div>
-            )}
+              {!draftList.length ? (
+                <div className="drafts-empty">
+                  <strong>No drafts yet</strong>
+                  <p>
+                    Your unfinished quizzes and import reviews will appear here
+                    after autosave.
+                  </p>
+                </div>
+              ) : (
+                <div className="drafts-grid">
+                  {draftList.map((d) => (
+                    <article className="draft-card" key={d.id}>
+                      <div className="draft-card-top">
+                        <span
+                          className={`draft-file-icon ${d.kind === "import" ? "is-import" : ""}`}
+                          aria-hidden="true"
+                        >
+                          <svg
+                            width="22"
+                            height="22"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" />
+                            <path d="M14 3v6h6M8 13h8M8 17h5" />
+                          </svg>
+                        </span>
+                        <div className="draft-card-copy">
+                          <span
+                            className={`draft-kind ${d.kind === "import" ? "is-import" : ""}`}
+                          >
+                            {d.kind === "import"
+                              ? "Import review"
+                              : "Quiz draft"}
+                          </span>
+                          <h3>{d.title || "Untitled draft"}</h3>
+                          <span className="draft-saved">
+                            {draftSavedAt(d.updatedAt)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="draft-card-actions">
+                        <button
+                          className="draft-resume"
+                          disabled={busy}
+                          aria-label={`Resume ${d.title || "Untitled draft"}`}
+                          onClick={() => run(() => resumeDraft(d.id))}
+                        >
+                          Resume draft <span aria-hidden="true">→</span>
+                        </button>
+                        <button
+                          className="draft-discard"
+                          disabled={busy}
+                          aria-label={`Discard ${d.title || "Untitled draft"}`}
+                          onClick={() => {
+                            if (
+                              confirm(
+                                "Discard this cloud draft? Your published quizzes stay unchanged.",
+                              )
+                            )
+                              void run(async () => {
+                                await request({
+                                  action: "draft_discard",
+                                  id: d.id,
+                                  revision: d.revision,
+                                });
+                                await dashboard();
+                              });
+                          }}
+                        >
+                          Discard
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
             <div className="section-title history-title">
               Recent sessions <span>Resume a room or review results</span>
             </div>
