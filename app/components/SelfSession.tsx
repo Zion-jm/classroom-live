@@ -229,13 +229,13 @@ export default function SelfSession({
   const q = room.question;
   if (!q) return <div className="empty">Restoring your attempt…</div>;
   return (
-    <section className="question-stage">
-      <div className="question-meta">
-        <span className="eyebrow">SELF-PACED · {room.title}</span>
-        <span>
-          QUESTION {room.index + 1} OF {room.total}
-        </span>
-        <strong>
+    <section className="question-stage self-question-stage">
+      <div className="self-session-meta">
+        <div className="self-quiz-identity">
+          <span className="self-mode-label">Self-paced quiz</span>
+          <span className="self-quiz-title">{room.title}</span>
+        </div>
+        <strong className="self-score-chip">
           {room.score === null
             ? room.feedback === "session_end"
               ? "Score after session ends"
@@ -243,23 +243,44 @@ export default function SelfSession({
             : `Score ${room.score} / ${room.total}`}
         </strong>
       </div>
-      <div className="timer-track">
+      <div className="self-progress-label">
+        <span>
+          Question <b>{room.index + 1}</b> of {room.total}
+        </span>
+        <span>{Math.round(((room.index + 1) / room.total) * 100)}%</span>
+      </div>
+      <div
+        className="self-progress-track"
+        role="progressbar"
+        aria-label="Current question"
+        aria-valuemin={0}
+        aria-valuemax={room.total}
+        aria-valuenow={room.index + 1}
+      >
         <div
           style={{
-            width: `${open ? Math.min(100, (seconds / (room.timerMode === "quiz" ? room.quizDurationSeconds : q.seconds)) * 100) : 0}%`,
+            width: `${((room.index + 1) / room.total) * 100}%`,
           }}
         />
       </div>
-      <div className="question-heading">
-        <h1>{q.prompt}</h1>
-        <div className={`timer ${open && seconds <= 5 ? "urgent" : ""}`}>
-          {room.timerMode === "quiz" && seconds > 0
-            ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
+      <div className="self-question-tools">
+        <span>
+          {revealed
+            ? "Answer review"
             : open
-              ? seconds
-              : revealed
-                ? "✓"
-                : "—"}
+              ? "Choose one answer"
+              : "Answer locked"}
+        </span>
+        <div className={`timer ${open && seconds <= 5 ? "urgent" : ""}`}>
+          <span className="self-timer-value">
+            {room.timerMode === "quiz" && seconds > 0
+              ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
+              : open
+                ? seconds
+                : revealed
+                  ? "✓"
+                  : "—"}
+          </span>
           <small>
             {room.timerMode === "quiz"
               ? "QUIZ TIME"
@@ -270,6 +291,9 @@ export default function SelfSession({
                   : "LOCKED"}
           </small>
         </div>
+      </div>
+      <div className="question-heading">
+        <h1>{q.prompt}</h1>
       </div>
       <div className="choice-grid">
         {q.choices.map((c: string, i: number) => {
@@ -294,7 +318,9 @@ export default function SelfSession({
       </div>
       <div className="answer-status" aria-live="polite">
         {revealed ? (
-          <div>
+          <div
+            className={`self-answer-feedback ${room.ownAnswer !== null && room.ownAnswer === q.correct ? "is-correct" : "is-incorrect"}`}
+          >
             <strong>
               {room.ownAnswer === null
                 ? "Time’s up — no answer. +0 points"
@@ -302,7 +328,7 @@ export default function SelfSession({
                   ? "✓ Correct! +1 point"
                   : "Incorrect. +0 points"}
             </strong>
-            <p>{q.explanation}</p>
+            {q.explanation && <p>{q.explanation}</p>}
           </div>
         ) : !open ? (
           <strong>
@@ -343,7 +369,7 @@ export default function SelfSession({
           </button>
         )}
       </div>
-      <p className="small">
+      <p className="small self-question-note">
         {room.feedback === "each"
           ? "Feedback appears after each question."
           : room.feedback === "session_end"
