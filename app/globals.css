@@ -1406,3 +1406,133 @@ code {
     flex-wrap: wrap;
   }
 }
+
+/* Hosting randomization: full-card labels with keyboard-accessible native controls. */
+.session-setup .shuffle-settings {
+  margin: 32px 0;
+}
+.shuffle-intro {
+  margin: -3px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.session-setup .shuffle-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  margin: 0 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
+}
+.session-setup .shuffle-option:hover {
+  border-color: #a4b5a2;
+  box-shadow: 0 3px 12px #214c3d08;
+}
+.session-setup .shuffle-option.is-on {
+  background: #edf3e4;
+  border-color: #8fa879;
+}
+.shuffle-copy strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.shuffle-copy small {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.65;
+  font-weight: 400;
+  color: var(--muted);
+}
+.session-setup input.shuffle-toggle {
+  appearance: none;
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #c4cec1;
+  border-radius: 999px;
+  background: #dce3d8;
+  cursor: pointer;
+}
+.shuffle-toggle::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  top: 3px;
+  left: 3px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px #193e3626;
+  transition: transform 0.15s;
+}
+.session-setup input.shuffle-toggle:checked {
+  background: var(--green);
+  border-color: var(--green);
+}
+.shuffle-toggle:checked::after {
+  transform: translateX(18px);
+}
+.shuffle-option:focus-within {
+  outline: 2px solid #7a992f;
+  outline-offset: 3px;
+}
+.shuffle-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 4px 4px 0;
+}
+.shuffle-note p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.8;
+}
+.shuffle-note strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+.shuffle-note-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 17px;
+  height: 17px;
+  margin-top: 2px;
+  border: 1px solid #b7c5ad;
+  border-radius: 50%;
+  color: var(--green);
+  font-family: Georgia, serif;
+  font-size: 11px;
+  font-weight: 700;
+}
+@media (max-width: 600px) {
+  .session-setup .shuffle-option {
+    padding: 17px 16px;
+    gap: 14px;
+  }
+  .shuffle-copy strong {
+    font-size: 13px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shuffle-toggle::after {
+    transition: none;
+  }
+}

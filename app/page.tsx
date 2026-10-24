@@ -869,31 +869,59 @@ export default function Home() {
                 </label>
               </fieldset>
             )}
-            <fieldset>
+            <fieldset className="shuffle-settings">
               <legend>Randomization</legend>
-              <label>
+              <p className="shuffle-intro">
+                A little variety for every round. Both options are optional.
+              </p>
+              <label
+                className={`shuffle-option ${shuffleQuestions ? "is-on" : ""}`}
+              >
+                <span className="shuffle-copy">
+                  <strong>Shuffle questions</strong>
+                  <small id="shuffle-questions-help">
+                    {mode === "teacher"
+                      ? "One shuffled sequence, shared by the whole class."
+                      : "A different question sequence for each student."}
+                  </small>
+                </span>
                 <input
+                  className="shuffle-toggle"
                   type="checkbox"
+                  aria-label="Shuffle questions"
+                  aria-describedby="shuffle-questions-help"
                   checked={shuffleQuestions}
                   onChange={(e) => setShuffleQuestions(e.target.checked)}
-                />{" "}
-                Shuffle questions{" "}
-                {mode === "teacher"
-                  ? "(one shared sequence)"
-                  : "(individual sequences)"}
+                />
               </label>
-              <label>
+              <label
+                className={`shuffle-option ${shuffleChoices ? "is-on" : ""}`}
+              >
+                <span className="shuffle-copy">
+                  <strong>Shuffle answer choices</strong>
+                  <small id="shuffle-choices-help">
+                    Mix the answer order independently for each student.
+                  </small>
+                </span>
                 <input
+                  className="shuffle-toggle"
                   type="checkbox"
+                  aria-label="Shuffle answer choices"
+                  aria-describedby="shuffle-choices-help shuffle-reveal-note"
                   checked={shuffleChoices}
                   onChange={(e) => setShuffleChoices(e.target.checked)}
-                />{" "}
-                Shuffle choices for each student
+                />
               </label>
-              <p className="small">
-                With shuffled choices, reveal by answer text—students may see
-                different letters.
-              </p>
+              <div className="shuffle-note" id="shuffle-reveal-note">
+                <span className="shuffle-note-icon" aria-hidden="true">
+                  i
+                </span>
+                <p>
+                  When choices are shuffled, discuss the{" "}
+                  <strong>answer text</strong>. Students may see different
+                  letters.
+                </p>
+              </div>
             </fieldset>
             {mode === "self" && (
               <fieldset>
