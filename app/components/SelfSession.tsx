@@ -78,59 +78,117 @@ export default function SelfSession({
     );
   if (host && room.phase !== "FINISHED")
     return (
-      <section>
-        <div className="eyebrow">
-          SELF-PACED ·{" "}
-          {room.feedback === "each"
-            ? "FEEDBACK AFTER EACH QUESTION"
-            : room.feedback === "session_end"
-              ? "FEEDBACK AFTER SESSION ENDS"
-              : "FEEDBACK AFTER FINISHING"}
+      <section className="teacher-live-dashboard">
+        <div className="teacher-session-tags">
+          <span className="teacher-live-tag">
+            <span aria-hidden="true">●</span> Self-paced session
+          </span>
+          <span className="teacher-feedback-tag">
+            {room.feedback === "each"
+              ? "Feedback after each question"
+              : room.feedback === "session_end"
+                ? "Feedback after session ends"
+                : "Feedback after finishing"}
+          </span>
         </div>
-        <div className="section-heading">
+        <div className="teacher-live-heading">
           <div>
-            <h1>
-              Every mind.
-              <br />
-              <em>Its own rhythm.</em>
-            </h1>
-            <p>
-              {room.title} · Students move through {room.total} questions
-              independently.
-            </p>
-            {room.timerMode === "quiz" && (
-              <p role="timer">
-                Quiz time remaining: {Math.floor(seconds / 60)}:
-                {String(seconds % 60).padStart(2, "0")}
-              </p>
-            )}
+            <h1>{room.title}</h1>
+            <p>{room.total} questions · Students move at their own pace.</p>
           </div>
-          <div className="completion-stat">
+          {room.timerMode === "quiz" && (
+            <div className="teacher-time-left" role="timer">
+              <span>Quiz time left</span>
+              <strong>
+                {Math.floor(seconds / 60)}:
+                {String(seconds % 60).padStart(2, "0")}
+              </strong>
+            </div>
+          )}
+        </div>
+        <div className="teacher-class-summary">
+          <div className="teacher-stat-grid">
+            <div>
+              <span>Students</span>
+              <strong>{room.players.length}</strong>
+            </div>
+            <div className="teacher-finished-stat">
+              <span>Finished</span>
+              <strong>{room.finishedCount}</strong>
+            </div>
+            <div>
+              <span>Still working</span>
+              <strong>
+                {Math.max(0, room.players.length - room.finishedCount)}
+              </strong>
+            </div>
+          </div>
+          <div className="teacher-completion-label">
+            <span>Class completion</span>
             <strong>
-              {room.finishedCount} / {room.players.length}
+              {room.players.length
+                ? Math.round((room.finishedCount / room.players.length) * 100)
+                : 0}
+              %
             </strong>
-            <span>students finished</span>
+          </div>
+          <div
+            className="teacher-completion-track"
+            role="progressbar"
+            aria-label="Students finished"
+            aria-valuemin={0}
+            aria-valuemax={room.players.length || 1}
+            aria-valuenow={room.finishedCount}
+          >
+            <div
+              style={{
+                width: `${room.players.length ? (room.finishedCount / room.players.length) * 100 : 0}%`,
+              }}
+            />
           </div>
         </div>
-        <div className="progress-table">
-          <div className="progress-row progress-header">
-            <span>Student</span>
-            <span>Progress</span>
-            <span>Submitted</span>
-            <span>Status</span>
-          </div>
+        <div className="teacher-roster-heading">
+          <h2>Student progress</h2>
+          <span>{room.progress.length} in this session</span>
+        </div>
+        <div
+          className="teacher-roster"
+          role="list"
+          aria-label="Student progress"
+        >
           {room.progress.map((p: any) => (
-            <div className="progress-row" key={p.id}>
-              <strong>{p.name}</strong>
-              <span>
-                {p.status === "FINISHED"
-                  ? "Completed"
-                  : `Question ${p.index + 1} / ${room.total}`}
-              </span>
-              <span>
-                {p.answered} / {room.total}
-              </span>
-              <span className="pill">
+            <div className="teacher-student-row" role="listitem" key={p.id}>
+              <div className="teacher-student-identity">
+                <span className="teacher-student-avatar" aria-hidden="true">
+                  {p.name.slice(0, 1).toUpperCase()}
+                </span>
+                <strong>{p.name}</strong>
+              </div>
+              <div className="teacher-student-position">
+                <small>Progress</small>
+                <span>
+                  {p.status === "FINISHED"
+                    ? "Completed"
+                    : `Question ${p.index + 1} / ${room.total}`}
+                </span>
+              </div>
+              <div className="teacher-student-submitted">
+                <small>Answers submitted</small>
+                <span>
+                  <b>{p.answered}</b> / {room.total}
+                </span>
+                <div className="teacher-answer-track">
+                  <div
+                    style={{ width: `${(p.answered / room.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+              <span
+                className={`teacher-student-status ${p.status === "FINISHED" ? "is-finished" : p.status === "OPEN" ? "is-answering" : "is-waiting"}`}
+              >
+                <span aria-hidden="true">
+                  {p.status === "FINISHED" ? "✓" : "●"}
+                </span>
                 {p.status === "FINISHED"
                   ? "Finished"
                   : p.status === "OPEN"
@@ -140,18 +198,18 @@ export default function SelfSession({
             </div>
           ))}
         </div>
-        <div className="host-controls">
-          <span className="small">
-            Results open automatically when everyone finishes.
-          </span>
+        <div className="teacher-session-controls">
+          <div>
+            <strong>Ready to wrap up?</strong>
+            <p>
+              Results open automatically when everyone finishes. Closing now
+              ends all remaining attempts; unanswered questions receive zero.
+            </p>
+          </div>
           <button className="primary" disabled={busy} onClick={onClose}>
             Close session & show results
           </button>
         </div>
-        <p className="small">
-          Closing early ends every remaining attempt. All unanswered questions
-          count as zero.
-        </p>
       </section>
     );
   if (done)

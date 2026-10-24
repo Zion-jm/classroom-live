@@ -1660,7 +1660,9 @@ export default function Home() {
               </section>
             )}
             {host && room.phase !== "LOBBY" && (
-              <div className="end-session">
+              <div
+                className={`end-session ${room.mode === "self" && room.phase === "RUNNING" ? "teacher-analysis-link" : ""}`}
+              >
                 <button
                   className="secondary"
                   disabled={busy}
