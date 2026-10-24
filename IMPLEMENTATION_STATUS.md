@@ -1,5 +1,16 @@
 # Local implementation status — October 24, 2026
 
+## Bulk quiz import
+
+- [x] Browser-only Word and Excel extraction, bounded ZIP/XML parsing, and explicit unsupported-file errors.
+- [x] Import preview with editable prompts, choices, correct answers, timers, explanations, question removal, and one-action quiz save.
+- [x] Review gates for ambiguous keys, correction notes, placeholder choices, formula rows, and possible duplicates.
+- [x] Supplied Word document extracts 80 questions, with source-review flags on questions 7, 50, and 60.
+- [x] Six parser tests cover Word formatting/notes/tables/line breaks and Excel strings/headers/formulas, plus invalid and oversized inputs.
+- [ ] New import UI deployed through GitHub/Vercel and verified on production.
+
+No additional SQL migration is required. Original source files and answer keys are not added to the repository or uploaded during extraction. The teacher reviews the data before invoking the existing authorized quiz-save operation.
+
 ## Self-paced upgrade
 
 - [x] Session setup with teacher-paced/self-paced selection and per-question/end-of-attempt feedback.

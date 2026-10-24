@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import SelfSession from "./components/SelfSession";
+import ImportQuiz from "./components/ImportQuiz";
 import {
   backendRequest,
   cloudMode,
@@ -191,7 +192,7 @@ export default function Home() {
   }, []);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (view === "editor") {
+      if (view === "editor" || view === "import") {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -500,15 +501,20 @@ export default function Home() {
                   Create a quiz, gather your class, and let curiosity take over.
                 </p>
               </div>
-              <button
-                className="primary"
-                onClick={() => {
-                  setDraft(freshQuiz());
-                  go("editor");
-                }}
-              >
-                + Create quiz
-              </button>
+              <div className="button-row">
+                <button className="secondary" onClick={() => go("import")}>
+                  ↑ Import quiz
+                </button>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setDraft(freshQuiz());
+                    go("editor");
+                  }}
+                >
+                  + Create quiz
+                </button>
+              </div>
             </div>
             <div className="section-title">
               Your quizzes <span>{quizzes.length} in your collection</span>
@@ -615,6 +621,42 @@ export default function Home() {
               </div>
             )}
           </>
+        )}
+        {view === "import" && (
+          <ImportQuiz
+            busy={busy}
+            onBack={leave}
+            onSave={async (imported) => {
+              setBusy(true);
+              setError("");
+              try {
+                const quiz = {
+                  title: imported.title.trim(),
+                  questions: imported.questions.map(
+                    ({ prompt, choices, correct, seconds, explanation }) => ({
+                      prompt: prompt.trim(),
+                      choices: choices.map((c) => c.trim()),
+                      correct,
+                      seconds,
+                      explanation,
+                    }),
+                  ),
+                };
+                await request({ action: "save", quiz });
+                await dashboard();
+                go("dashboard");
+                setNotice(
+                  `Imported ${quiz.questions.length} questions. Ready to host in either mode.`,
+                );
+                return true;
+              } catch (e) {
+                setError((e as Error).message);
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
         )}
         {view === "setup" && (
           <section className="narrow session-setup">
