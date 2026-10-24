@@ -2,6 +2,10 @@
 
 A host-controlled classroom quiz application built with Next.js and TypeScript. It supports local file storage for development and Supabase PostgreSQL/Auth/Realtime for the cloud. Start with local mode, or follow [SUPABASE_SETUP.md](SUPABASE_SETUP.md) to configure cloud mode.
 
+## Feature expansion (migration 003)
+
+Session setup now includes saved question/choice shuffling, self-paced whole-quiz timing, and feedback withheld until the entire session ends. Teacher lobbies include QR joins; editors/import reviews save private resumable drafts; session Question results shows choice distributions and response-time summaries. Follow [EXPANSION_UPGRADE.md](EXPANSION_UPGRADE.md) **before deploying this version**: existing Supabase projects must apply migration 003 once. The guide covers usage, verification, rollout, and rollback limits. Local mode supports these features immediately.
+
 ## Bulk import
 
 The teacher dashboard includes **Import quiz** for `.docx` and `.xlsx`. Preview all extracted questions, correct flagged source issues, set timers, and save everything as one new quiz. Parsing stays in the browser; only the reviewed quiz is saved. See [QUIZ_IMPORT.md](QUIZ_IMPORT.md) for supported layouts, Excel headers, and limits. No database migration or new environment variable is required.

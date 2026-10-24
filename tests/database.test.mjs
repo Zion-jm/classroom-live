@@ -40,6 +40,95 @@ test("Supabase migration: role isolation, complete 50-player game, deadlines, ra
         "utf8",
       ),
     );
+    // Upgrade an existing active session with an accepted answer, not just an empty schema.
+    const legacyTeacher = randomUUID(),
+      legacyStudent = randomUUID();
+    await db.query("insert into auth.users(id) values($1),($2)", [
+      legacyTeacher,
+      legacyStudent,
+    ]);
+    await db.query("insert into classroom_private.admins values($1)", [
+      legacyTeacher,
+    ]);
+    async function legacyRpc(who, body) {
+      await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
+        who,
+      ]);
+      return (
+        await db.query("select public.classroom_request($1::jsonb) result", [
+          JSON.stringify(body),
+        ])
+      ).rows[0].result;
+    }
+    const legacyQuiz = (
+      await legacyRpc(legacyTeacher, {
+        action: "save",
+        quiz: {
+          title: "Existing before upgrade",
+          questions: [
+            {
+              prompt: "Legacy",
+              choices: ["Yes", "No"],
+              correct: 0,
+              seconds: 300,
+              explanation: "Existing key",
+            },
+          ],
+        },
+      })
+    ).quiz;
+    const legacyCode = (
+      await legacyRpc(legacyTeacher, {
+        action: "host",
+        id: legacyQuiz.id,
+        mode: "self",
+        feedback: "end",
+      })
+    ).code;
+    await legacyRpc(legacyStudent, {
+      action: "join",
+      code: legacyCode,
+      name: "Existing player",
+    });
+    let legacyState = await legacyRpc(legacyTeacher, {
+      action: "snapshot",
+      code: legacyCode,
+      hosting: true,
+    });
+    await legacyRpc(legacyTeacher, {
+      action: "start",
+      code: legacyCode,
+      revision: legacyState.revision,
+    });
+    const beforeUpgrade = await legacyRpc(legacyStudent, {
+      action: "snapshot",
+      code: legacyCode,
+    });
+    await legacyRpc(legacyStudent, {
+      action: "answer",
+      code: legacyCode,
+      questionId: beforeUpgrade.question.id,
+      choice: 0,
+    });
+    const upgrade = await readFile(
+      new URL(
+        "../supabase/migrations/202610240003_expansion.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    try {
+      await db.exec(upgrade);
+    } catch (e) {
+      console.error(
+        "SQL location:",
+        e.position,
+        upgrade.slice(Number(e.position) - 180, Number(e.position) + 180),
+        e.internalQuery,
+        e.where,
+      );
+      throw e;
+    }
     const teacher = randomUUID(),
       otherTeacher = randomUUID();
     const students = Array.from({ length: 51 }, () => randomUUID());
@@ -61,6 +150,29 @@ test("Supabase migration: role isolation, complete 50-player game, deadlines, ra
         ])
       ).rows[0].result;
     }
+    const afterUpgrade = await rpc(legacyStudent, {
+      action: "snapshot",
+      code: legacyCode,
+    });
+    assert.equal(afterUpgrade.ownAnswer, 0);
+    assert.equal(afterUpgrade.question.id, beforeUpgrade.question.id);
+    assert.equal(afterUpgrade.question.correct, undefined);
+    const legacyFinished = await rpc(legacyStudent, {
+      action: "next_self",
+      code: legacyCode,
+      questionId: beforeUpgrade.question.id,
+    });
+    assert.equal(legacyFinished.score, 1);
+    assert.equal(legacyFinished.review.length, 1);
+    assert.equal(
+      (
+        await rpc(legacyTeacher, {
+          action: "session_analysis",
+          code: legacyCode,
+        })
+      ).questions[0].reached,
+      null,
+    );
     assert.equal((await rpc(students[0])).admin, false);
     await assert.rejects(rpc(null), /Sign in/);
     await assert.rejects(
@@ -354,6 +466,20 @@ test("Supabase migration: role isolation, complete 50-player game, deadlines, ra
       rpc(teacher, { action: "host", id: selfQuiz.id, mode: "invalid" }),
       /valid session/,
     );
+    await assert.rejects(
+      rpc(teacher, { action: "host", id: selfQuiz.id, timerMode: "quiz" }),
+      /Invalid session settings/,
+    );
+    await assert.rejects(
+      rpc(teacher, {
+        action: "host",
+        id: selfQuiz.id,
+        mode: "self",
+        timerMode: "quiz",
+        quizDurationSeconds: 59,
+      }),
+      /1–180/,
+    );
     for (const feedback of ["each", "end"]) {
       const c = (
         await rpc(teacher, {
@@ -506,6 +632,462 @@ test("Supabase migration: role isolation, complete 50-player game, deadlines, ra
       assert.equal(finalExport.questions.length, 2);
       assert.equal(finalExport.state.leaderboard[0].score, 2);
     }
+    // Every supported self-paced configuration uses canonical grading and stable presentation.
+    for (const feedback of ["each", "end", "session_end"])
+      for (const timerMode of ["question", "quiz"])
+        for (const shuffleQuestions of [false, true])
+          for (const shuffleChoices of [false, true]) {
+            const c = (
+              await rpc(teacher, {
+                action: "host",
+                id: selfQuiz.id,
+                mode: "self",
+                feedback,
+                timerMode,
+                quizDurationSeconds: 60,
+                shuffleQuestions,
+                shuffleChoices,
+              })
+            ).code;
+            for (let i = 0; i < 2; i++)
+              await rpc(students[i], {
+                action: "join",
+                code: c,
+                name: `Matrix ${i}`,
+              });
+            let h = await rpc(teacher, {
+              action: "snapshot",
+              code: c,
+              hosting: true,
+            });
+            await rpc(teacher, {
+              action: "start",
+              code: c,
+              revision: h.revision,
+            });
+            let a = await rpc(students[0], { action: "snapshot", code: c });
+            const firstDeadline = a.deadline,
+              seen = [];
+            for (let step = 0; step < 2; step++) {
+              seen.push(a.question.id);
+              const again = await rpc(students[0], {
+                action: "snapshot",
+                code: c,
+              });
+              assert.deepEqual(again.question, a.question);
+              assert.equal(a.question.correct, undefined);
+              assert.equal(a.question.explanation, undefined);
+              assert.equal(a.questionOrders, undefined);
+              assert.deepEqual(a.review, []);
+              const selected = a.question.choices.indexOf("Green");
+              if (shuffleChoices)
+                await assert.rejects(
+                  rpc(students[0], {
+                    action: "answer",
+                    code: c,
+                    questionId: a.question.id,
+                    choice: selected,
+                  }),
+                  /choice IDs/,
+                );
+              const qid = a.question.id;
+              a = await rpc(students[0], {
+                action: "answer",
+                code: c,
+                questionId: qid,
+                choiceId: a.question.choiceIds[selected],
+              });
+              assert.equal(a.ownAnswer, selected);
+              assert.equal(
+                a.question.correct,
+                feedback === "each" ? selected : undefined,
+              );
+              assert.equal(a.score, feedback === "each" ? step + 1 : null);
+              a = await rpc(students[0], {
+                action: "next_self",
+                code: c,
+                questionId: qid,
+              });
+              if (timerMode === "quiz" && step === 0)
+                assert.equal(a.deadline, firstDeadline);
+            }
+            assert.equal(new Set(seen).size, 2);
+            assert.equal(a.phase, "ATTEMPT_FINISHED");
+            assert.equal(a.score, feedback === "session_end" ? null : 2);
+            assert.equal(a.review.length, feedback === "session_end" ? 0 : 2);
+            assert.deepEqual(a.leaderboard, []);
+            const activeAnalysis = await rpc(teacher, {
+              action: "session_analysis",
+              code: c,
+            });
+            assert.equal(activeAnalysis.questions[0].unanswered, null);
+            await assert.rejects(
+              rpc(students[0], { action: "session_analysis", code: c }),
+              /do not own/,
+            );
+            await assert.rejects(
+              rpc(otherTeacher, { action: "session_analysis", code: c }),
+              /do not own/,
+            );
+            h = await rpc(teacher, {
+              action: "snapshot",
+              code: c,
+              hosting: true,
+            });
+            await rpc(teacher, {
+              action: "close_session",
+              code: c,
+              revision: h.revision,
+            });
+            a = await rpc(students[0], { action: "snapshot", code: c });
+            assert.equal(a.score, 2);
+            assert.equal(a.review.length, 2);
+            assert.deepEqual(
+              a.review.map((q) => q.id),
+              seen,
+            );
+            for (const q of a.review)
+              assert.equal(q.choices[q.correct], "Green");
+            const metrics = await rpc(teacher, {
+              action: "session_analysis",
+              code: c,
+            });
+            for (const q of metrics.questions) {
+              assert.equal(q.submitted, 1);
+              assert.equal(q.correct, 1);
+              assert.equal(q.incorrect, 0);
+              assert.equal(q.unanswered, 1);
+              assert.equal(q.correctRate, 0.5);
+              assert.equal(q.submissionAccuracy, 1);
+              assert.equal(q.timingSamples, 1);
+              assert.ok(q.medianResponseMs >= 0);
+              assert.deepEqual(
+                q.distribution.map((x) => x.count),
+                [1, 0],
+              );
+            }
+          }
+    for (const shuffleQuestions of [false, true])
+      for (const shuffleChoices of [false, true]) {
+        const c = (
+          await rpc(teacher, {
+            action: "host",
+            id: selfQuiz.id,
+            mode: "teacher",
+            shuffleQuestions,
+            shuffleChoices,
+          })
+        ).code;
+        for (let i = 0; i < 2; i++)
+          await rpc(students[i], {
+            action: "join",
+            code: c,
+            name: `Teacher matrix ${i}`,
+          });
+        let h = await rpc(teacher, {
+          action: "snapshot",
+          code: c,
+          hosting: true,
+        });
+        h = await rpc(teacher, {
+          action: "start",
+          code: c,
+          revision: h.revision,
+        });
+        for (let step = 0; step < 2; step++) {
+          for (const id of students.slice(0, 2)) {
+            let a = await rpc(id, { action: "snapshot", code: c });
+            assert.equal(a.question.id, h.question.id);
+            assert.equal(a.question.correct, undefined);
+            await rpc(id, {
+              action: "answer",
+              code: c,
+              questionId: a.question.id,
+              choiceId:
+                a.question.choiceIds[a.question.choices.indexOf("Green")],
+            });
+          }
+          h = await rpc(teacher, {
+            action: "snapshot",
+            code: c,
+            hosting: true,
+          });
+          h = await rpc(teacher, {
+            action: "close",
+            code: c,
+            revision: h.revision,
+          });
+          h = await rpc(teacher, {
+            action: "reveal",
+            code: c,
+            revision: h.revision,
+          });
+          for (const id of students.slice(0, 2)) {
+            const a = await rpc(id, { action: "snapshot", code: c });
+            assert.equal(a.question.choices[a.question.correct], "Green");
+            assert.equal(a.ownAnswer, a.question.correct);
+          }
+          if (step === 0)
+            h = await rpc(teacher, {
+              action: "next",
+              code: c,
+              revision: h.revision,
+            });
+        }
+        h = await rpc(teacher, {
+          action: "finish",
+          code: c,
+          revision: h.revision,
+        });
+        assert.ok(h.leaderboard.every((p) => p.score === 2));
+      }
+    // An overall timeout applies between questions, and strict feedback never unlocks on cancellation.
+    for (const cancel of [false, true]) {
+      const c = (
+        await rpc(teacher, {
+          action: "host",
+          id: selfQuiz.id,
+          mode: "self",
+          feedback: "session_end",
+          timerMode: "quiz",
+          quizDurationSeconds: 60,
+        })
+      ).code;
+      await rpc(students[0], { action: "join", code: c, name: "Timed" });
+      let h = await rpc(teacher, {
+        action: "snapshot",
+        code: c,
+        hosting: true,
+      });
+      await rpc(teacher, { action: "start", code: c, revision: h.revision });
+      const a = await rpc(students[0], { action: "snapshot", code: c });
+      await rpc(students[0], {
+        action: "answer",
+        code: c,
+        questionId: a.question.id,
+        choiceId: a.question.choiceIds[0],
+      });
+      if (cancel) {
+        h = await rpc(teacher, { action: "snapshot", code: c, hosting: true });
+        await rpc(teacher, { action: "cancel", code: c, revision: h.revision });
+      } else {
+        await db.exec("reset role");
+        await db.query(
+          "update classroom_private.attempts set overall_deadline=1 where room_id=(select id from classroom_private.rooms where code=$1)",
+          [c],
+        );
+        await db.query("select classroom_private.expire_questions()");
+      }
+      const final = await rpc(students[0], { action: "snapshot", code: c });
+      assert.equal(final.phase, cancel ? "CANCELLED" : "FINISHED");
+      assert.equal(final.score, cancel ? null : 1);
+      assert.equal(final.review.length, cancel ? 0 : 2);
+    }
+    // Private incomplete drafts, stale writes, validation, and idempotent promotion.
+    const did = randomUUID();
+    let d = await rpc(teacher, {
+      action: "draft_save",
+      id: did,
+      kind: "editor",
+      revision: 0,
+      payload: { quiz: { title: "Incomplete", questions: [] } },
+    });
+    assert.equal(d.revision, 1);
+    await assert.rejects(
+      rpc(students[0], { action: "draft_load", id: did }),
+      /Administrator/,
+    );
+    await assert.rejects(
+      rpc(otherTeacher, { action: "draft_load", id: did }),
+      /do not own/,
+    );
+    assert.deepEqual(await rpc(otherTeacher, { action: "draft_list" }), []);
+    await assert.rejects(
+      rpc(teacher, {
+        action: "draft_save",
+        id: did,
+        kind: "editor",
+        revision: 0,
+        payload: {},
+      }),
+      /conflict/,
+    );
+    await assert.rejects(
+      rpc(teacher, { action: "draft_publish", id: did, revision: 1 }),
+      /question/i,
+    );
+    d = await rpc(teacher, {
+      action: "draft_save",
+      id: did,
+      kind: "editor",
+      revision: 1,
+      payload: { quiz: { title: "Published draft", questions: [question] } },
+    });
+    const promoted = await rpc(teacher, {
+      action: "draft_publish",
+      id: did,
+      revision: d.revision,
+    });
+    assert.equal(
+      (
+        await rpc(teacher, {
+          action: "draft_publish",
+          id: did,
+          revision: d.revision,
+        })
+      ).quiz.id,
+      promoted.quiz.id,
+    );
+    assert.equal((await rpc(teacher, { action: "draft_list" })).length, 0);
+    const importId = randomUUID();
+    let imp = await rpc(teacher, {
+      action: "draft_save",
+      id: importId,
+      kind: "import",
+      revision: 0,
+      payload: {
+        result: {
+          title: "Review import",
+          questions: [
+            {
+              ...question,
+              issues: [{ message: "Check key", acknowledged: false }],
+            },
+          ],
+        },
+      },
+    });
+    await assert.rejects(
+      rpc(teacher, {
+        action: "draft_publish",
+        id: importId,
+        revision: imp.revision,
+      }),
+      /flagged/,
+    );
+    await assert.rejects(
+      rpc(teacher, { action: "draft_discard", id: importId, revision: 0 }),
+      /changed/,
+    );
+    await rpc(teacher, {
+      action: "draft_discard",
+      id: importId,
+      revision: imp.revision,
+    });
+    await assert.rejects(
+      rpc(teacher, {
+        action: "draft_save",
+        id: importId,
+        kind: "import",
+        revision: imp.revision,
+        payload: {},
+      }),
+      /discarded/,
+    );
+    assert.equal(
+      (await rpc(teacher, { action: "capabilities" })).schemaVersion,
+      3,
+    );
+    const sourceQuiz = (
+      await rpc(teacher, { action: "dashboard" })
+    ).quizzes.find((q) => q.id === promoted.quiz.id);
+    const editId = randomUUID();
+    const edited = await rpc(teacher, {
+      action: "draft_save",
+      id: editId,
+      kind: "editor",
+      revision: 0,
+      payload: { quiz: sourceQuiz },
+    });
+    await rpc(teacher, {
+      action: "save",
+      quiz: { ...sourceQuiz, title: "Changed elsewhere" },
+    });
+    await assert.rejects(
+      rpc(teacher, {
+        action: "draft_publish",
+        id: editId,
+        revision: edited.revision,
+      }),
+      /changed/,
+    );
+    await rpc(teacher, { action: "delete", id: sourceQuiz.id });
+    await assert.rejects(
+      rpc(teacher, {
+        action: "draft_publish",
+        id: editId,
+        revision: edited.revision,
+      }),
+      /deleted/,
+    );
+    const largeQuiz = (
+      await rpc(teacher, {
+        action: "save",
+        quiz: {
+          title: "100-question expiry boundary",
+          questions: Array.from({ length: 100 }, (_, i) => ({
+            ...question,
+            prompt: `Boundary ${i}`,
+          })),
+        },
+      })
+    ).quiz;
+    const largeCode = (
+      await rpc(teacher, {
+        action: "host",
+        id: largeQuiz.id,
+        mode: "self",
+        feedback: "session_end",
+        timerMode: "quiz",
+        quizDurationSeconds: 10800,
+        shuffleQuestions: true,
+        shuffleChoices: true,
+      })
+    ).code;
+    for (let i = 0; i < 50; i++)
+      await rpc(students[i], {
+        action: "join",
+        code: largeCode,
+        name: `Boundary ${i}`,
+      });
+    const largeLobby = await rpc(teacher, {
+      action: "snapshot",
+      code: largeCode,
+      hosting: true,
+    });
+    await rpc(teacher, {
+      action: "start",
+      code: largeCode,
+      revision: largeLobby.revision,
+    });
+    await db.exec("reset role");
+    await db.query(
+      "update classroom_private.attempts set overall_deadline=1 where room_id=(select id from classroom_private.rooms where code=$1)",
+      [largeCode],
+    );
+    await db.query("select classroom_private.expire_questions()");
+    const expired = await rpc(students[0], {
+      action: "snapshot",
+      code: largeCode,
+    });
+    assert.equal(expired.phase, "FINISHED");
+    assert.equal(expired.review.length, 100);
+    assert.equal(expired.leaderboard.length, 50);
+    assert.equal(expired.finishReason, "overall_timeout");
+    const largeReport = await rpc(teacher, {
+      action: "session_analysis",
+      code: largeCode,
+    });
+    assert.equal(largeReport.questions.length, 100);
+    assert.ok(
+      largeReport.questions.every(
+        (q) => q.unanswered === 50 && q.submitted === 0,
+      ),
+    );
+    assert.equal(
+      largeReport.questions.reduce((n, q) => n + q.reached, 0),
+      50,
+    );
     await db.exec("reset role; set role anon");
     await assert.rejects(
       db.query("select public.classroom_request('{}')"),

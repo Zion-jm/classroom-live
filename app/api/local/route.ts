@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import { transaction } from "../../../lib/store";
+import { analysis } from "../../../lib/presentation.mjs";
 import {
   GameError,
   validateQuiz,
@@ -81,6 +82,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       transaction((db) => ({
         admin: true,
+        ownerId: "local-teacher",
         quizzes: db.quizzes,
         rooms: db.rooms
           .map((r: any) => {
@@ -114,7 +116,7 @@ export async function POST(req: NextRequest) {
     if (origin && new URL(origin).host !== req.headers.get("host"))
       throw new GameError("Cross-origin requests are not allowed.", 403);
     const text = await req.text();
-    if (text.length > 300000) throw new GameError("Request is too large.", 413);
+    if (text.length > 600000) throw new GameError("Request is too large.", 413);
     let body;
     try {
       body = JSON.parse(text);
@@ -149,7 +151,7 @@ export async function POST(req: NextRequest) {
       if (body.action === "answer") {
         const r = roomFor(db, body.code);
         const p = playerFor(req, r);
-        submit(r, p.id, body.questionId, body.choice);
+        submit(r, p.id, body.questionId, body.choiceId ?? body.choice);
         return snapshot(r, p.id);
       }
       if (body.action === "next_self") {
@@ -161,10 +163,109 @@ export async function POST(req: NextRequest) {
         return snapshot(r, p.id);
       }
       requireAdmin(req);
+      if (body.action.startsWith("draft_")) {
+        db.drafts ??= [];
+        const i = db.drafts.findIndex((d: any) => d.id === body.id);
+        const d = db.drafts[i];
+        if (body.action === "draft_list")
+          return db.drafts
+            .filter((d: any) => !d.published_id)
+            .map((d: any) => ({
+              ...d,
+              title:
+                d.payload.quiz?.title ||
+                d.payload.result?.title ||
+                "Untitled draft",
+              updatedAt: d.updated_at,
+            }));
+        if (body.action === "draft_load") {
+          if (!d) throw new GameError("Draft not found.");
+          return d;
+        }
+        if (body.action === "draft_save") {
+          if (
+            !["editor", "import"].includes(body.kind) ||
+            !body.payload ||
+            typeof body.payload !== "object" ||
+            JSON.stringify(body.payload).length > 500000
+          )
+            throw new GameError("Invalid or oversized draft.");
+          if (
+            (d && (d.revision !== body.revision || d.published_id)) ||
+            (!d && body.revision !== 0)
+          )
+            throw new GameError(
+              "Draft conflict or discarded. Save recovery as new draft.",
+            );
+          const next = {
+            id: body.id,
+            revision: (d?.revision ?? 0) + 1,
+            kind: body.kind,
+            payload: body.payload,
+            updated_at: Date.now(),
+          };
+          if (d) db.drafts[i] = next;
+          else db.drafts.push(next);
+          return next;
+        }
+        if (!d) throw new GameError("Draft not found.");
+        if (
+          body.action === "draft_publish" &&
+          d.published_id &&
+          d.published_revision === body.revision
+        )
+          return { quiz: { id: d.published_id } };
+        if (d.revision !== body.revision)
+          throw new GameError("Draft changed. Reload before continuing.");
+        if (body.action === "draft_discard") {
+          db.drafts.splice(i, 1);
+          return { ok: true };
+        }
+        if (body.action === "draft_publish") {
+          const input = d.kind === "editor" ? d.payload.quiz : d.payload.result;
+          if (
+            d.kind === "import" &&
+            input.questions.some((q: any) =>
+              q.issues?.some((v: any) => !v.acknowledged),
+            )
+          )
+            throw new GameError("Review flagged import notes.");
+          const source = db.quizzes.find((q: any) => q.id === input.id);
+          if (input.id && !source)
+            throw new GameError("Source quiz was deleted. Save as a new quiz.");
+          if (
+            source &&
+            input.revision !== undefined &&
+            source.revision !== input.revision
+          )
+            throw new GameError("Quiz changed. Save as new.");
+          const q = {
+            ...validateQuiz(input),
+            id: input.id || randomUUID(),
+            revision: (source?.revision ?? 0) + 1,
+            updatedAt: Date.now(),
+          };
+          const at = db.quizzes.findIndex((x: any) => x.id === q.id);
+          if (at < 0) db.quizzes.push(q);
+          else db.quizzes[at] = q;
+          d.published_id = q.id;
+          d.published_revision = d.revision;
+          return { quiz: q };
+        }
+        throw new GameError("Unknown draft action.");
+      }
       if (body.action === "save") {
+        const source = db.quizzes.find((q: any) => q.id === body.quiz.id);
+        if (
+          source &&
+          body.quiz.revision !== undefined &&
+          body.quiz.revision !== source.revision
+        )
+          throw new GameError("Quiz changed. Save as a new quiz.");
         const quiz = {
           ...validateQuiz(body.quiz),
           id: body.quiz.id || randomUUID(),
+          revision: (source?.revision ?? 0) + 1,
           updatedAt: Date.now(),
         };
         const i = db.quizzes.findIndex((q: any) => q.id === quiz.id);
@@ -179,7 +280,7 @@ export async function POST(req: NextRequest) {
       if (body.action === "host") {
         const q = db.quizzes.find((q: any) => q.id === body.id);
         if (!q) throw new GameError("Quiz not found.", 404);
-        const options = { mode: body.mode, feedback: body.feedback };
+        const options = body;
         let r = createRoom(q, Date.now(), options);
         while (db.rooms.some((x: any) => x.code === r.code))
           r = createRoom(q, Date.now(), options);
@@ -187,6 +288,7 @@ export async function POST(req: NextRequest) {
         return { code: r.code };
       }
       const room = roomFor(db, body.code);
+      if (body.action === "session_analysis") return analysis(room);
       if (body.action === "remove") {
         if (room.phase !== "LOBBY")
           throw new GameError("Remove players before starting.");
@@ -203,6 +305,14 @@ export async function POST(req: NextRequest) {
           room.phase === "FINISHED" || room.mode === "self"
             ? room.quiz.questions.length
             : snapshot(room, null, true).revealedCount;
+        const columns = room.quiz.questions
+          .slice(0, count)
+          .map((q: any, i: number) => ({ ...q, canonicalIndex: i }))
+          .sort(
+            (a: any, b: any) =>
+              (a.sourceIndex ?? a.canonicalIndex) -
+              (b.sourceIndex ?? b.canonicalIndex),
+          );
         const rows = [
           [
             "Rank",
@@ -210,9 +320,7 @@ export async function POST(req: NextRequest) {
             "Score",
             "Revealed questions",
             "Status",
-            ...room.quiz.questions
-              .slice(0, count)
-              .map((q: any, i: number) => `Q${i + 1}: ${q.prompt}`),
+            ...columns.map((q: any, i: number) => `Q${i + 1}: ${q.prompt}`),
           ],
           ...rankings(room).map((p: any) => [
             p.rank,
@@ -220,8 +328,8 @@ export async function POST(req: NextRequest) {
             p.score,
             count,
             room.phase,
-            ...room.quiz.questions.slice(0, count).map((q: any, i: number) => {
-              const a = room.answers[`${i}:${p.id}`];
+            ...columns.map((q: any) => {
+              const a = room.answers[`${q.canonicalIndex}:${p.id}`];
               return !a
                 ? "Unanswered"
                 : a.choice === q.correct

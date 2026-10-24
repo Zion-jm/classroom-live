@@ -1,5 +1,19 @@
 # Local implementation status — October 24, 2026
 
+## Feature expansion (current release)
+
+- [x] All six features implemented in the local and Supabase paths: stable shuffling, question analysis, resumable private drafts, QR lobby, whole-quiz timer, and session-end-only feedback.
+- [x] Migration 003 preserves an existing active self-paced game and accepted answer; legacy teacher/self regressions pass.
+- [x] All 24 self-paced configurations and four teacher shuffle configurations checked in local engines and PostgreSQL.
+- [x] Draft owner isolation, stale revisions, incomplete validation, import acknowledgements, repeated publishing, changed/deleted source handling, strict privacy, timer expiry between questions, and canonical review checked.
+- [x] 50 students × 100 shuffled questions checked locally; 50 overall expirations in a 100-question SQL session checked.
+- [x] Existing 50-player HTTP verification, both original self-paced HTTP checks, and expansion HTTP checks pass against isolated local data.
+- [x] TypeScript and Supabase-mode production build pass.
+- [ ] Visual/browser/phone checks: browser automation unavailable because local browser use is disabled in Work settings.
+- [ ] User applies migration 003, pushes the reviewed changes, verifies Vercel deployment, and rehearses on real classroom devices/network.
+
+See [EXPANSION_UPGRADE.md](EXPANSION_UPGRADE.md). Older sections below are historical milestone records; their rollout checkboxes have not been revalidated against production in this task.
+
 ## Bulk quiz import
 
 - [x] Browser-only Word and Excel extraction, bounded ZIP/XML parsing, and explicit unsupported-file errors.

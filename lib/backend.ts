@@ -46,7 +46,14 @@ function friendlyError(error: {
   return new Error(error.message);
 }
 export function exportCsv(payload: any) {
-  const { state, questions, answers } = payload;
+  const { state, answers } = payload;
+  const questions = payload.questions
+    .map((q: any, i: number) => ({ ...q, canonicalIndex: i }))
+    .sort(
+      (a: any, b: any) =>
+        (a.sourceIndex ?? a.canonicalIndex) -
+        (b.sourceIndex ?? b.canonicalIndex),
+    );
   const escape = (v: unknown) =>
     '"' +
     String(v)
@@ -72,7 +79,7 @@ export function exportCsv(payload: any) {
       state.revealedCount,
       state.phase,
       ...questions.map((q: any, i: number) => {
-        const c = answerMap.get(`${p.id}:${i}`);
+        const c = answerMap.get(`${p.id}:${q.canonicalIndex}`);
         return c === undefined
           ? "Unanswered"
           : c === q.correct
@@ -159,6 +166,21 @@ export async function backendRequest(
     if (capability.error || !capability.data?.selfPaced)
       throw new Error(
         "Install the new self-paced SQL migration (202610240002_self_paced.sql) in Supabase before hosting this mode.",
+      );
+  }
+  if (
+    operation.action === "host" &&
+    (operation.shuffleQuestions ||
+      operation.shuffleChoices ||
+      operation.timerMode === "quiz" ||
+      operation.feedback === "session_end")
+  ) {
+    const { data, error } = await supabase.rpc("classroom_request", {
+      body: { action: "capabilities" },
+    });
+    if (error || !data?.expansion)
+      throw new Error(
+        "Install migration 003 (expansion) before using these session settings.",
       );
   }
   const { data, error } = await supabase.rpc("classroom_request", {

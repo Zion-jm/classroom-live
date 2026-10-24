@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { seed } from "./engine.mjs";
-const dir = path.join(process.cwd(), ".local");
+const dir = path.join(
+  process.cwd(),
+  ".local",
+  process.env.LOCAL_TEST_DATA_NAME || "",
+);
 const file = path.join(dir, "database.json");
 // Synchronous read/mutate/atomic rename serializes requests in one local Node process.
 // This adapter is intentionally forbidden on Vercel; replace with PostgreSQL RPCs.

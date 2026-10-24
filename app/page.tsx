@@ -2,6 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import SelfSession from "./components/SelfSession";
 import ImportQuiz from "./components/ImportQuiz";
+import LobbyQR from "./components/LobbyQR";
+import Analysis from "./components/Analysis";
+import DraftPanel, { type DraftHandle } from "./components/DraftPanel";
 import {
   backendRequest,
   cloudMode,
@@ -16,7 +19,12 @@ type Question = {
   explanation: string;
   id?: string;
 };
-type Quiz = { id?: string; title: string; questions: Question[] };
+type Quiz = {
+  id?: string;
+  revision?: number;
+  title: string;
+  questions: Question[];
+};
 const blankQuestion = (): Question => ({
   prompt: "",
   choices: ["", "", "", ""],
@@ -53,6 +61,14 @@ export default function Home() {
   const [hostId, setHostId] = useState<string | undefined>();
   const [mode, setMode] = useState("teacher");
   const [feedback, setFeedback] = useState("end");
+  const [shuffleQuestions, setShuffleQuestions] = useState(false),
+    [shuffleChoices, setShuffleChoices] = useState(false),
+    [timerMode, setTimerMode] = useState("question"),
+    [minutes, setMinutes] = useState(20);
+  const [analysisData, setAnalysisData] = useState<any>(null),
+    [draftList, setDraftList] = useState<any[]>([]),
+    [restoredDraft, setRestoredDraft] = useState<any>(null);
+  const editorDraft = useRef<DraftHandle>(null);
   async function request(body?: any, query = "", authToken = token) {
     return backendRequest(body, query, authToken);
   }
@@ -74,6 +90,11 @@ export default function Home() {
     if (d.admin) {
       setQuizzes(d.quizzes);
       setHistory(d.rooms);
+      try {
+        setDraftList(await request({ action: "draft_list" }));
+      } catch {
+        setDraftList([]);
+      }
     }
   }
   function acceptRoom(r: any) {
@@ -98,6 +119,14 @@ export default function Home() {
     if (saved) {
       try {
         const p = JSON.parse(saved);
+        const requested = new URLSearchParams(location.search)
+          .get("room")
+          ?.toUpperCase();
+        if (requested && requested !== p.code) {
+          setCode(requested);
+          setView("join");
+          return;
+        }
         setToken(p.token);
         setPlayerId(p.playerId);
         setCode(p.code);
@@ -138,7 +167,11 @@ export default function Home() {
         if (active) {
           acceptRoom(r);
           failures = 0;
-          if (r.phase === "QUESTION_OPEN")
+          if (
+            r.deadline &&
+            r.phase !== "FINISHED" &&
+            r.phase !== "ATTEMPT_FINISHED"
+          )
             nextDelay = Math.min(
               nextDelay,
               Math.max(150, r.deadline - r.serverNow + 100),
@@ -190,16 +223,6 @@ export default function Home() {
     const timer = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(timer);
   }, []);
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (view === "editor" || view === "import") {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [view]);
   const seconds = room?.deadline
     ? Math.max(0, Math.ceil((room.deadline - now - offset.current) / 1000))
     : 0;
@@ -213,7 +236,16 @@ export default function Home() {
     setView(view);
   }
   async function hostQuiz(id?: string) {
-    const r = await request({ action: "host", id, mode, feedback });
+    const r = await request({
+      action: "host",
+      id,
+      mode,
+      feedback,
+      shuffleQuestions,
+      shuffleChoices,
+      timerMode: mode === "self" ? timerMode : "question",
+      quizDurationSeconds: minutes * 60,
+    });
     setCode(r.code);
     setRoom(null);
     go("host");
@@ -237,9 +269,13 @@ export default function Home() {
     }));
   }
   function leave() {
+    if (busy) return;
     if (
       view === "editor" &&
-      !confirm("Leave the editor? Unsaved changes will be lost.")
+      editorDraft.current?.isDirty() &&
+      !confirm(
+        "Leave before the draft finishes saving? Check the device recovery copy when you return.",
+      )
     )
       return;
     go(admin ? "dashboard" : "home");
@@ -256,6 +292,18 @@ export default function Home() {
     a.download = `classroom-${code}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+  async function openAnalysis() {
+    setAnalysisData(await request({ action: "session_analysis", code }));
+    go("analysis");
+  }
+  async function resumeDraft(id: string) {
+    const d = await request({ action: "draft_load", id });
+    setRestoredDraft(d);
+    if (d.kind === "editor") {
+      setDraft(d.payload.quiz);
+      go("editor");
+    } else go("import");
   }
   return (
     <main>
@@ -502,13 +550,20 @@ export default function Home() {
                 </p>
               </div>
               <div className="button-row">
-                <button className="secondary" onClick={() => go("import")}>
+                <button
+                  className="secondary"
+                  onClick={() => {
+                    setRestoredDraft(null);
+                    go("import");
+                  }}
+                >
                   ↑ Import quiz
                 </button>
                 <button
                   className="primary"
                   onClick={() => {
                     setDraft(freshQuiz());
+                    setRestoredDraft(null);
                     go("editor");
                   }}
                 >
@@ -539,6 +594,10 @@ export default function Home() {
                         onClick={() => {
                           setHostId(q.id);
                           setMode("teacher");
+                          setShuffleQuestions(false);
+                          setShuffleChoices(false);
+                          setTimerMode("question");
+                          setMinutes(20);
                           setFeedback("end");
                           go("setup");
                         }}
@@ -549,6 +608,7 @@ export default function Home() {
                         className="secondary"
                         onClick={() => {
                           setDraft(structuredClone(q));
+                          setRestoredDraft(null);
                           go("editor");
                         }}
                       >
@@ -563,6 +623,7 @@ export default function Home() {
                             id: undefined,
                             title: `${q.title} (copy)`,
                           });
+                          setRestoredDraft(null);
                           go("editor");
                         }}
                       >
@@ -589,6 +650,45 @@ export default function Home() {
                 </article>
               ))}
             </div>
+            <div className="section-title history-title">
+              Private drafts <span>Resume unfinished work</span>
+            </div>
+            {!draftList.length ? (
+              <p className="small">Drafts appear here after autosave.</p>
+            ) : (
+              <div className="history">
+                {draftList.map((d) => (
+                  <div className="draft-list-row" key={d.id}>
+                    <button
+                      className="text-button"
+                      onClick={() => run(() => resumeDraft(d.id))}
+                    >
+                      {d.title || "Untitled draft"} · {d.kind} · Resume →
+                    </button>
+                    <button
+                      className="danger-text"
+                      onClick={() => {
+                        if (
+                          confirm(
+                            "Discard this cloud draft? Your published quizzes stay unchanged.",
+                          )
+                        )
+                          void run(async () => {
+                            await request({
+                              action: "draft_discard",
+                              id: d.id,
+                              revision: d.revision,
+                            });
+                            await dashboard();
+                          });
+                      }}
+                    >
+                      Discard
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="section-title history-title">
               Recent sessions <span>Resume a room or review results</span>
             </div>
@@ -622,11 +722,15 @@ export default function Home() {
             )}
           </>
         )}
+        {view === "analysis" && analysisData && (
+          <Analysis data={analysisData} onBack={leave} />
+        )}
         {view === "import" && (
           <ImportQuiz
+            restore={restoredDraft}
             busy={busy}
             onBack={leave}
-            onSave={async (imported) => {
+            onSave={async (imported, publish) => {
               setBusy(true);
               setError("");
               try {
@@ -642,7 +746,7 @@ export default function Home() {
                     }),
                   ),
                 };
-                await request({ action: "save", quiz });
+                await publish();
                 await dashboard();
                 go("dashboard");
                 setNotice(
@@ -746,11 +850,98 @@ export default function Home() {
                   An early finisher can review answers while classmates are
                   still answering.
                 </p>
+                <label
+                  className={`mode-option ${feedback === "session_end" ? "chosen" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="feedback"
+                    checked={feedback === "session_end"}
+                    onChange={() => setFeedback("session_end")}
+                  />
+                  <span>
+                    <strong>After the whole session ends</strong>
+                    <small>
+                      Early finishers wait. No scores or answers until everyone
+                      finishes or you close the session.
+                    </small>
+                  </span>
+                </label>
+              </fieldset>
+            )}
+            <fieldset>
+              <legend>Randomization</legend>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={shuffleQuestions}
+                  onChange={(e) => setShuffleQuestions(e.target.checked)}
+                />{" "}
+                Shuffle questions{" "}
+                {mode === "teacher"
+                  ? "(one shared sequence)"
+                  : "(individual sequences)"}
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={shuffleChoices}
+                  onChange={(e) => setShuffleChoices(e.target.checked)}
+                />{" "}
+                Shuffle choices for each student
+              </label>
+              <p className="small">
+                With shuffled choices, reveal by answer text—students may see
+                different letters.
+              </p>
+            </fieldset>
+            {mode === "self" && (
+              <fieldset>
+                <legend>Timing</legend>
+                <label className="mode-option">
+                  <input
+                    type="radio"
+                    name="timing"
+                    checked={timerMode === "question"}
+                    onChange={() => setTimerMode("question")}
+                  />{" "}
+                  Individual question timers
+                </label>
+                <label className="mode-option">
+                  <input
+                    type="radio"
+                    name="timing"
+                    checked={timerMode === "quiz"}
+                    onChange={() => setTimerMode("quiz")}
+                  />{" "}
+                  One whole-quiz timer
+                </label>
+                {timerMode === "quiz" && (
+                  <label>
+                    Total minutes (1–180)
+                    <input
+                      type="number"
+                      min={1}
+                      max={180}
+                      value={minutes}
+                      onChange={(e) => setMinutes(Number(e.target.value))}
+                    />
+                    <small>
+                      Starts when you start the class. Continues between
+                      questions, through feedback, and during disconnections.
+                    </small>
+                  </label>
+                )}
               </fieldset>
             )}
             <button
               className="primary full"
-              disabled={busy}
+              disabled={
+                busy ||
+                (mode === "self" &&
+                  timerMode === "quiz" &&
+                  (!Number.isInteger(minutes) || minutes < 1 || minutes > 180))
+              }
               onClick={() => run(() => hostQuiz(hostId))}
             >
               Create lobby →
@@ -762,7 +953,7 @@ export default function Home() {
           </section>
         )}
         {view === "editor" && (
-          <>
+          <fieldset className="editor-fields" disabled={busy}>
             <div className="section-heading">
               <div>
                 <button className="text-button" onClick={leave}>
@@ -784,7 +975,7 @@ export default function Home() {
                   disabled={busy}
                   onClick={() =>
                     run(async () => {
-                      await request({ action: "save", quiz: draft });
+                      await editorDraft.current!.publish();
                       await dashboard();
                       go("dashboard");
                       setNotice("Quiz saved. Ready when your class is.");
@@ -804,6 +995,13 @@ export default function Home() {
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
               />
             </label>
+            <DraftPanel
+              ref={editorDraft}
+              kind="editor"
+              payload={{ quiz: draft }}
+              restore={restoredDraft}
+              onRecover={(p) => setDraft(p.quiz)}
+            />
             {draft.questions.map((q, i) => (
               <article className="editor-card" key={i}>
                 <div className="editor-toolbar">
@@ -999,7 +1197,7 @@ export default function Home() {
                 + Add another question
               </button>
             )}
-          </>
+          </fieldset>
         )}
         {["host", "player"].includes(view) && !room && (
           <div className="empty">Connecting to your classroom…</div>
@@ -1043,9 +1241,10 @@ export default function Home() {
                   )}
                 </h1>
                 <p>{room.title}</p>
+                {host && <LobbyQR code={room.code} />}
                 <p className="small">
                   {room.mode === "self"
-                    ? `Self-paced · Answers ${room.feedback === "each" ? "after each question" : "after finishing the quiz"}`
+                    ? `Self-paced · Answers ${room.feedback === "each" ? "after each question" : room.feedback === "session_end" ? "after the whole session ends" : "after finishing the quiz"}`
                     : "Teacher-paced · Your teacher controls the next question"}
                 </p>
                 {host ? (
@@ -1139,6 +1338,7 @@ export default function Home() {
                         code,
                         questionId: room.question.id,
                         choice: selection,
+                        choiceId: room.question.choiceIds?.[selection!],
                       }),
                     ),
                   )
@@ -1312,6 +1512,7 @@ export default function Home() {
                                 code,
                                 questionId: room.question.id,
                                 choice: selection,
+                                choiceId: room.question.choiceIds?.[selection!],
                               }),
                             ),
                           )
@@ -1369,6 +1570,17 @@ export default function Home() {
                   </div>
                 )}
               </section>
+            )}
+            {host && room.phase !== "LOBBY" && (
+              <div className="end-session">
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => run(openAnalysis)}
+                >
+                  Question results dashboard →
+                </button>
+              </div>
             )}
             {host &&
               (room.mode !== "self" || room.phase === "LOBBY") &&

@@ -83,7 +83,9 @@ export default function SelfSession({
           SELF-PACED ·{" "}
           {room.feedback === "each"
             ? "FEEDBACK AFTER EACH QUESTION"
-            : "FEEDBACK AFTER FINISHING"}
+            : room.feedback === "session_end"
+              ? "FEEDBACK AFTER SESSION ENDS"
+              : "FEEDBACK AFTER FINISHING"}
         </div>
         <div className="section-heading">
           <div>
@@ -96,6 +98,12 @@ export default function SelfSession({
               {room.title} · Students move through {room.total} questions
               independently.
             </p>
+            {room.timerMode === "quiz" && (
+              <p role="timer">
+                Quiz time remaining: {Math.floor(seconds / 60)}:
+                {String(seconds % 60).padStart(2, "0")}
+              </p>
+            )}
           </div>
           <div className="completion-stat">
             <strong>
@@ -170,7 +178,7 @@ export default function SelfSession({
         <p>
           {room.title} · {room.total} questions
         </p>
-        {!host && (
+        {!host && room.score !== null && (
           <div className="personal-score">
             Your score{" "}
             <strong>
@@ -182,6 +190,18 @@ export default function SelfSession({
           <p>
             Your answers are locked. Final rankings appear when everyone
             finishes or your teacher closes the session.
+          </p>
+        )}
+        {!host && room.score === null && (
+          <p>
+            Your attempt is complete. Scores and answers stay hidden until the
+            whole session ends.
+          </p>
+        )}
+        {!host && room.finishReason === "overall_timeout" && (
+          <p>
+            The whole-quiz timer expired. Your accepted answers were saved;
+            unanswered questions receive zero.
           </p>
         )}
         {room.phase === "FINISHED" && (
@@ -217,22 +237,38 @@ export default function SelfSession({
         </span>
         <strong>
           {room.score === null
-            ? "Score after finishing"
+            ? room.feedback === "session_end"
+              ? "Score after session ends"
+              : "Score after finishing"
             : `Score ${room.score} / ${room.total}`}
         </strong>
       </div>
       <div className="timer-track">
         <div
           style={{
-            width: `${open ? Math.min(100, (seconds / q.seconds) * 100) : 0}%`,
+            width: `${open ? Math.min(100, (seconds / (room.timerMode === "quiz" ? room.quizDurationSeconds : q.seconds)) * 100) : 0}%`,
           }}
         />
       </div>
       <div className="question-heading">
         <h1>{q.prompt}</h1>
         <div className={`timer ${open && seconds <= 5 ? "urgent" : ""}`}>
-          {open ? seconds : revealed ? "✓" : "—"}
-          <small>{open ? "SECONDS" : revealed ? "REVEALED" : "LOCKED"}</small>
+          {room.timerMode === "quiz" && seconds > 0
+            ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
+            : open
+              ? seconds
+              : revealed
+                ? "✓"
+                : "—"}
+          <small>
+            {room.timerMode === "quiz"
+              ? "QUIZ TIME"
+              : open
+                ? "SECONDS"
+                : revealed
+                  ? "REVEALED"
+                  : "LOCKED"}
+          </small>
         </div>
       </div>
       <div className="choice-grid">
@@ -275,7 +311,9 @@ export default function SelfSession({
               : "Answer recorded."}{" "}
             {room.feedback === "end"
               ? "Correct answers and your score appear after you finish."
-              : "Waiting for your answer feedback…"}
+              : room.feedback === "session_end"
+                ? "Correct answers and your score appear after the whole session ends."
+                : "Waiting for your answer feedback…"}
           </strong>
         ) : (
           <span>Select your answer, then submit to lock it.</span>
@@ -291,7 +329,12 @@ export default function SelfSession({
         ) : (
           <button
             className="primary"
-            disabled={busy || !online || room.phase === "QUESTION_OPEN"}
+            disabled={
+              busy ||
+              !online ||
+              room.phase === "QUESTION_OPEN" ||
+              (room.timerMode === "quiz" && seconds <= 0)
+            }
             onClick={onNext}
           >
             {room.index === room.total - 1
@@ -303,8 +346,12 @@ export default function SelfSession({
       <p className="small">
         {room.feedback === "each"
           ? "Feedback appears after each question."
-          : "Your full answer review appears after you finish all questions."}{" "}
-        Each new timer starts when you click Next.
+          : room.feedback === "session_end"
+            ? "Scores and answer reviews appear only when the whole session ends."
+            : "Your full answer review appears after you finish all questions."}{" "}
+        {room.timerMode === "quiz"
+          ? "The whole-quiz timer continues between questions and during disconnections."
+          : "Each new timer starts when you click Next."}
       </p>
     </section>
   );
