@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import LobbyCrowd from "./components/LobbyCrowd";
 import SelfSession from "./components/SelfSession";
 import ImportQuiz from "./components/ImportQuiz";
 import LobbyQR from "./components/LobbyQR";
@@ -1363,41 +1364,11 @@ export default function Home() {
                     The curious crowd{" "}
                     <span>{room.players.length} / 50 joined</span>
                   </div>
-                  <div className="players">
-                    {room.players.map((p: any, i: number) => (
-                      <div
-                        className={`player-chip ${p.id === playerId ? "you" : ""}`}
-                        key={p.id}
-                      >
-                        <span className={`avatar avatar-${i % 4}`}>
-                          {p.name.slice(0, 1).toUpperCase()}
-                        </span>
-                        {p.name}
-                        {p.id === playerId && <small>You</small>}
-                        {host && (
-                          <button
-                            aria-label={`Remove ${p.name}`}
-                            onClick={() =>
-                              run(async () =>
-                                acceptRoom(
-                                  await request({
-                                    action: "remove",
-                                    code,
-                                    playerId: p.id,
-                                  }),
-                                ),
-                              )
-                            }
-                          >
-                            ×
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {!room.players.length && (
-                      <p>Share the code. Your students will appear here.</p>
-                    )}
-                  </div>
+                  <LobbyCrowd
+                    players={room.players}
+                    playerId={playerId}
+                    onRemove={host ? (id) => { void run(async () => acceptRoom(await request({ action: "remove", code, playerId: id }))); } : undefined}
+                  />
                 </div>
                 {host && (
                   <button

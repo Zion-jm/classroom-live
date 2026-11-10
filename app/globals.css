@@ -942,6 +942,113 @@ textarea {
 .avatar-3 {
   background: #e3dced;
 }
+/* Animated lobby characters keep names and teacher controls stationary. */
+.crowd-garden {
+  padding: 18px 12px 24px;
+  border: 1px solid #dce3d3;
+  border-radius: 22px;
+  background: radial-gradient(ellipse at 15% 100%, #dee9cd 0, transparent 55%),
+    radial-gradient(ellipse at 90% 80%, #e7edda 0, transparent 50%), #f0f3e9;
+}
+.crowd-garden-caption {
+  color: #6c7c61;
+  font-size: 10px;
+  letter-spacing: .5px;
+  text-align: center;
+  margin-bottom: 18px;
+}
+.crowd-cast {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 22px 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.crowd-member { min-width: 0; text-align: center; }
+.crowd-character-space { height: 120px; position: relative; }
+.crowd-shadow {
+  position: absolute;
+  bottom: 8px;
+  left: calc(50% - 25px);
+  width: 50px;
+  height: 9px;
+  border-radius: 50%;
+  background: #244d3f19;
+}
+.crowd-character {
+  width: 96px;
+  height: 110px;
+  overflow: visible;
+  animation: crowd-wander var(--character-speed) ease-in-out infinite;
+  animation-delay: var(--character-delay);
+}
+.crowd-arm, .crowd-leg {
+  stroke: #244d3f;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-box: view-box;
+}
+.crowd-arm.right {
+  transform-origin: 75px 49px;
+  animation: crowd-wave 2.4s ease-in-out infinite;
+  animation-delay: var(--character-delay);
+}
+.crowd-action-1 { animation-name: crowd-hop; }
+.crowd-action-2 { animation-name: crowd-sway; }
+.crowd-action-2 .crowd-arm.left {
+  transform-origin: 25px 49px;
+  animation: crowd-wave 3s ease-in-out infinite reverse;
+  animation-delay: var(--character-delay);
+}
+.crowd-nameplate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 2px 8px;
+  border: 1px solid #dce3d3;
+  border-radius: 12px;
+  background: #fffdf8;
+  color: var(--ink);
+  font-size: 12px;
+}
+.crowd-name { min-width: 0; overflow-wrap: anywhere; }
+.crowd-nameplate small { font-size: 9px; color: #647858; }
+.crowd-nameplate button {
+  min-width: 32px;
+  min-height: 36px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  font-size: 17px;
+}
+.crowd-nameplate button:hover { background: #f4e4db; }
+.is-you .crowd-nameplate { border-color: #87a350; background: #f4f8e9; }
+.crowd-empty { padding: 36px 10px; font-size: 13px; }
+@keyframes crowd-wander {
+  0%, 100% { transform: translateX(-7px) rotate(-3deg); }
+  50% { transform: translateX(7px) rotate(3deg); }
+}
+@keyframes crowd-hop {
+  0%, 30%, 65%, 100% { transform: translateY(0); }
+  40%, 55% { transform: translateY(-12px) rotate(3deg); }
+  47% { transform: translateY(-3px) rotate(-3deg); }
+}
+@keyframes crowd-sway {
+  0%, 100% { transform: rotate(-7deg); }
+  50% { transform: rotate(7deg); }
+}
+@keyframes crowd-wave {
+  0%, 55%, 100% { transform: rotate(0); }
+  65%, 85% { transform: rotate(25deg); }
+  75%, 95% { transform: rotate(-15deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .crowd-character, .crowd-arm.right, .crowd-action-2 .crowd-arm.left { animation: none; }
+}
 .waiting {
   display: inline-block;
   background: #e8eeda;
