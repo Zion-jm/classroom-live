@@ -1521,6 +1521,16 @@ export default function Home() {
                       Score {room.score} / {room.total}
                     </strong>
                   )}
+                  <div
+                    className={`timer live-question-timer ${seconds <= 5 && !revealed ? "urgent" : ""}`}
+                  >
+                    {room.phase === "QUESTION_OPEN"
+                      ? seconds
+                      : revealed
+                        ? "✓"
+                        : "0"}
+                    <small>{revealed ? "REVEALED" : "SECONDS"}</small>
+                  </div>
                 </div>
                 <div className="timer-track">
                   <div
@@ -1531,16 +1541,6 @@ export default function Home() {
                 </div>
                 <div className="question-heading">
                   <h1>{room.question.prompt}</h1>
-                  <div
-                    className={`timer ${seconds <= 5 && !revealed ? "urgent" : ""}`}
-                  >
-                    {room.phase === "QUESTION_OPEN"
-                      ? seconds
-                      : revealed
-                        ? "✓"
-                        : "0"}
-                    <small>{revealed ? "REVEALED" : "SECONDS"}</small>
-                  </div>
                 </div>
                 <div className="choice-grid">
                   {room.question.choices.map((c: string, i: number) => {
