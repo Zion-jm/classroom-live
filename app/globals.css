@@ -1278,6 +1278,167 @@ textarea {
     font-size: 9px;
   }
 }
+/* The simulation supplies one shared clock for each finite action. */
+.garden-dust {
+  display: none;
+}
+.garden-actor[data-action="slip"] .garden-sprite-body {
+  animation: garden-slip 3.6s linear both paused;
+  animation-delay: var(--action-delay);
+}
+.garden-actor[data-action="slip"] .garden-dust {
+  display: block;
+  animation: garden-dust 3.6s linear both paused;
+  animation-delay: var(--action-delay);
+}
+.garden-actor[data-action="slip"] .garden-emote,
+.garden-actor[data-action="hug"] .garden-emote,
+.garden-actor[data-action="highfive"] .garden-emote {
+  display: block;
+  animation: garden-reaction 3.6s linear both paused;
+  animation-delay: var(--action-delay);
+}
+.garden-actor[data-action="hug"] .garden-emote text {
+  fill: #c87781;
+}
+.garden-actor[data-action="hop"] .garden-sprite-body {
+  animation: garden-hop 3.6s linear both paused;
+  animation-delay: var(--action-delay);
+}
+.garden-actor[data-action="hug"] .garden-sprite-body {
+  animation: garden-hug 3.6s ease-in-out both paused;
+  animation-delay: var(--action-delay);
+}
+.garden-actor[data-action="hug"] .garden-hand-left {
+  transform: rotate(80deg);
+}
+.garden-actor[data-action="hug"] .garden-hand-right {
+  transform: rotate(-80deg);
+}
+.garden-actor[data-action="highfive"] .garden-sprite-body {
+  animation: garden-greet 3.6s ease-in-out both paused;
+  animation-delay: var(--action-delay);
+}
+.garden-five-palm {
+  display: none;
+}
+.garden-actor[data-action="highfive"][data-direction="right"]
+  .garden-hand-right,
+.garden-actor[data-action="highfive"][data-direction="left"] .garden-hand-left {
+  opacity: 0;
+}
+.garden-actor[data-action="highfive"][data-direction="right"]
+  .garden-five-palm-right,
+.garden-actor[data-action="highfive"][data-direction="left"]
+  .garden-five-palm-left {
+  display: block;
+  animation: garden-palm 3.6s linear both paused;
+  animation-delay: var(--action-delay);
+}
+@keyframes garden-palm {
+  0%,
+  10%,
+  95%,
+  100% {
+    opacity: 0;
+  }
+  22%,
+  78% {
+    opacity: 1;
+  }
+}
+@keyframes garden-slip {
+  0%,
+  8%,
+  100% {
+    transform: translate(0, 0) rotate(0) scale(1);
+  }
+  16% {
+    transform: translate(-3px, -2px) rotate(-16deg);
+  }
+  25% {
+    transform: translate(-11px, 0) rotate(84deg) scale(0.7);
+  }
+  30%,
+  57% {
+    transform: translate(-11px, 1px) rotate(84deg) scale(0.7);
+  }
+  68% {
+    transform: translate(-5px, 0) rotate(40deg) scale(0.85);
+  }
+  80% {
+    transform: translate(0, -2px) rotate(-7deg) scale(1);
+  }
+  90% {
+    transform: translate(0, 0) rotate(0) scale(1);
+  }
+}
+@keyframes garden-dust {
+  0%,
+  22%,
+  48%,
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  28% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  42% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+@keyframes garden-reaction {
+  0%,
+  18%,
+  90%,
+  100% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  28%,
+  72% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes garden-hop {
+  0%,
+  15%,
+  42%,
+  66%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  28% {
+    transform: translateY(-15px) rotate(-7deg);
+  }
+  54% {
+    transform: translateY(-11px) rotate(7deg);
+  }
+}
+@keyframes garden-hug {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25%,
+  70% {
+    transform: translateX(calc(var(--social-side) * 13px));
+  }
+}
+@keyframes garden-greet {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25%,
+  70% {
+    transform: translateX(calc(var(--social-side) * 6px));
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .garden-lobby * {
     animation: none !important;

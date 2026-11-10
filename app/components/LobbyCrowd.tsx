@@ -98,6 +98,24 @@ function Character({ seed }: { seed: number }) {
           />
           <path d="M0-20V-9" stroke="#8a6748" />
         </g>
+        <g className="garden-five-palm garden-five-palm-right">
+          <path
+            d="M10-24L12-34L14-44"
+            stroke={skin}
+            strokeWidth="5"
+            fill="none"
+          />
+          <path d="M11-48H17V-42H11Z" fill={skin} />
+        </g>
+        <g className="garden-five-palm garden-five-palm-left">
+          <path
+            d="M-10-24L-12-34L-14-44"
+            stroke={skin}
+            strokeWidth="5"
+            fill="none"
+          />
+          <path d="M-17-48H-11V-42H-17Z" fill={skin} />
+        </g>
       </g>
     </g>
   );
@@ -164,6 +182,25 @@ export default function LobbyCrowd({
         );
         el.dataset.action = a.action;
         el.dataset.direction = a.direction;
+        el.dataset.partner = a.partner || "";
+        el.style.setProperty(
+          "--action-delay",
+          `${-(world.time - a.actionStarted)}s`,
+        );
+        el.style.setProperty(
+          "--social-side",
+          a.direction === "right" ? "1" : "-1",
+        );
+        const emote = el.querySelector(".garden-emote text");
+        const symbol =
+          a.action === "hug"
+            ? "♥"
+            : a.action === "highfive"
+              ? "✦"
+              : a.action === "slip"
+                ? "?!"
+                : "♪";
+        if (emote && emote.textContent !== symbol) emote.textContent = symbol;
         // Keep labels clear of neighboring bodies and of each other in a full class.
         el.dataset.label = agents.some(
           (b, j) =>
@@ -406,6 +443,9 @@ export default function LobbyCrowd({
                   strokeWidth="2"
                 />
                 <Character seed={seed} />
+                <g className="garden-dust" fill="#fff7d6" aria-hidden="true">
+                  <path d="M-17-4H-14V-1H-17ZM12-2H16V1H12ZM-6 3H-3V6H-6Z" />
+                </g>
                 <g className="garden-emote">
                   <rect
                     x="-10"
@@ -459,7 +499,7 @@ export default function LobbyCrowd({
       <div className="garden-caption">
         <span>
           {players.length
-            ? "Wandering, waving, waiting for the quiz."
+            ? "Little adventures before the quiz begins."
             : "A quiet moment before everyone arrives."}
         </span>
         <span>

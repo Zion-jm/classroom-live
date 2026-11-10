@@ -4,6 +4,7 @@ import {
   createGarden,
   LobbyWorld,
   ACTIONS,
+  SOCIAL_ACTIONS,
   TILE,
 } from "../lib/lobby-world.mjs";
 
@@ -23,6 +24,17 @@ function checkWorld(world) {
       reserved.add(cell);
     }
     assert.ok(Number.isFinite(a.x) && Number.isFinite(a.y));
+    if (a.partner) {
+      const b = world.agents.get(a.partner);
+      assert.equal(b.partner, a.id);
+      assert.equal(a.action, b.action);
+      assert.equal(a.actionStarted, b.actionStarted);
+      assert.equal(a.until, b.until);
+      assert.equal(a.next, null);
+      assert.equal(a.path.length, 0);
+      assert.equal(a.y, b.y);
+      assert.equal(Math.abs(a.x - b.x), TILE);
+    }
   }
 }
 
@@ -46,9 +58,74 @@ test("a full class stays inside paths and avoids other students while roaming", 
       }
     }
     assert.equal(moved.size, 50, "Every student should get a chance to walk");
-    for (const action of ACTIONS)
+    for (const action of [...ACTIONS, ...SOCIAL_ACTIONS])
       assert.ok(actions.has(action), `Missing ${action}`);
   }
+});
+
+function adjacentPair() {
+  const world = new LobbyWorld();
+  world.sync(["left", "right", "third"]);
+  const a = world.agents.get("left"),
+    b = world.agents.get("right");
+  for (const [actor, x] of [
+    [a, 3],
+    [b, 4],
+  ]) {
+    actor.cell = `${x},3`;
+    actor.x = (x + 0.5) * TILE;
+    actor.y = 3.5 * TILE;
+    actor.socialAfter = 0;
+    actor.until = 0;
+  }
+  return { world, a, b };
+}
+
+test("paired actions share a clock, finish together, and keep their cells", () => {
+  for (const action of SOCIAL_ACTIONS) {
+    const { world, a, b } = adjacentPair();
+    for (let seed = 0; seed < 1000; seed++) {
+      a.random = seed;
+      if (world.trySocial(a)) {
+        if (a.action === action) break;
+        world.finishSocial(a);
+        a.socialAfter = b.socialAfter = 0;
+      }
+    }
+    assert.equal(a.action, action);
+    const cells = [a.cell, b.cell];
+    for (let i = 0; i < 30; i++) {
+      world.step(0.1);
+      checkWorld(world);
+    }
+    assert.deepEqual([a.cell, b.cell], cells);
+    assert.equal(a.partner, b.id);
+    for (let i = 0; i < 8; i++) world.step(0.1);
+    assert.equal(a.partner, null);
+    assert.equal(b.partner, null);
+    assert.equal(a.action, "idle");
+    assert.equal(b.action, "idle");
+    assert.ok(
+      a.socialAfter > world.time,
+      "Allow time to walk between greetings",
+    );
+  }
+});
+
+test("leaving during a greeting releases the remaining student and allows walking", () => {
+  const { world, a, b } = adjacentPair();
+  while (!world.trySocial(a)) {}
+  world.step(0.1);
+  world.sync([a.id]);
+  assert.equal(a.partner, null);
+  assert.equal(a.action, "idle");
+  assert.ok(!world.agents.has(b.id));
+  const origin = [a.x, a.y];
+  for (let i = 0; i < 100; i++) {
+    world.step(0.1);
+    checkWorld(world);
+  }
+  assert.notDeepEqual([a.x, a.y], origin);
 });
 
 test("server roster refreshes keep positions and removal frees reserved spaces", () => {
