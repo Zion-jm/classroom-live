@@ -942,112 +942,346 @@ textarea {
 .avatar-3 {
   background: #e3dced;
 }
-/* Animated lobby characters keep names and teacher controls stationary. */
-.crowd-garden {
-  padding: 18px 12px 24px;
-  border: 1px solid #dce3d3;
-  border-radius: 22px;
-  background: radial-gradient(ellipse at 15% 100%, #dee9cd 0, transparent 55%),
-    radial-gradient(ellipse at 90% 80%, #e7edda 0, transparent 50%), #f0f3e9;
+/* A shared courtyard: movement is decorative and never controls quiz state. */
+.garden-lobby {
+  border: 1px solid #d5dec9;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fffdf6;
+  text-align: left;
+  box-shadow: 0 6px 20px #244d3f05;
 }
-.crowd-garden-caption {
-  color: #6c7c61;
-  font-size: 10px;
-  letter-spacing: .5px;
-  text-align: center;
-  margin-bottom: 18px;
+.garden-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 17px 20px;
 }
-.crowd-cast {
+.garden-toolbar > div {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 22px 8px;
-  list-style: none;
-  padding: 0;
-  margin: 0;
+  grid-template-columns: 8px 1fr;
+  align-items: center;
+  gap: 5px 9px;
 }
-.crowd-member { min-width: 0; text-align: center; }
-.crowd-character-space { height: 120px; position: relative; }
-.crowd-shadow {
-  position: absolute;
-  bottom: 8px;
-  left: calc(50% - 25px);
-  width: 50px;
-  height: 9px;
+.garden-toolbar strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.garden-toolbar small {
+  grid-column: 2;
+  font-size: 10px;
+  color: #7b866e;
+}
+.garden-live-dot {
+  width: 6px;
+  height: 6px;
+  background: #82a657;
   border-radius: 50%;
-  background: #244d3f19;
 }
-.crowd-character {
-  width: 96px;
-  height: 110px;
-  overflow: visible;
-  animation: crowd-wander var(--character-speed) ease-in-out infinite;
-  animation-delay: var(--character-delay);
+.garden-pause {
+  border: 1px solid #dce2d1;
+  border-radius: 7px;
+  min-height: 36px;
+  padding: 7px 11px;
+  font-size: 11px;
+  white-space: nowrap;
+  background: #f5f7ef;
 }
-.crowd-arm, .crowd-leg {
+.garden-pause:hover {
+  background: #eaf0df;
+}
+.garden-pause:disabled {
+  opacity: 0.65;
+}
+.garden-map-wrap {
+  position: relative;
+  border-top: 1px solid #a0b885;
+  border-bottom: 1px solid #a0b885;
+  background: #a9c58a;
+}
+.garden-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: "DM Sans", Arial, sans-serif;
+}
+.garden-actor {
+  cursor: pointer;
+}
+.garden-actor .garden-label {
+  pointer-events: none;
+}
+.garden-actor[data-label="hidden"] .garden-label {
+  opacity: 0;
+}
+.garden-actor:hover .garden-label,
+.garden-selected .garden-label,
+.garden-you .garden-label {
+  opacity: 1;
+}
+.garden-selection-ring {
+  opacity: 0;
+}
+.garden-you .garden-selection-ring,
+.garden-selected .garden-selection-ring {
+  opacity: 1;
+}
+.garden-selected .garden-label rect {
   stroke: #244d3f;
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  stroke-width: 2;
+}
+.garden-book,
+.garden-back-hair,
+.garden-emote {
+  display: none;
+}
+.garden-actor[data-direction="up"] .garden-face {
+  display: none;
+}
+.garden-actor[data-direction="up"] .garden-back-hair {
+  display: block;
+}
+.garden-actor[data-direction="left"] .garden-sprite {
+  transform: skewY(-3deg);
+}
+.garden-actor[data-direction="right"] .garden-sprite {
+  transform: skewY(3deg);
+}
+.garden-actor[data-action="walk"] .garden-leg-left {
+  animation: garden-step 0.35s steps(2, end) infinite alternate;
+}
+.garden-actor[data-action="walk"] .garden-leg-right {
+  animation: garden-step 0.35s steps(2, end) infinite alternate-reverse;
+}
+.garden-actor[data-action="walk"] .garden-sprite-body {
+  animation: garden-bob 0.35s steps(2, end) infinite;
+}
+.garden-hand {
   transform-box: view-box;
 }
-.crowd-arm.right {
-  transform-origin: 75px 49px;
-  animation: crowd-wave 2.4s ease-in-out infinite;
-  animation-delay: var(--character-delay);
+.garden-hand-right {
+  transform-origin: 10px -24px;
 }
-.crowd-action-1 { animation-name: crowd-hop; }
-.crowd-action-2 { animation-name: crowd-sway; }
-.crowd-action-2 .crowd-arm.left {
-  transform-origin: 25px 49px;
-  animation: crowd-wave 3s ease-in-out infinite reverse;
-  animation-delay: var(--character-delay);
+.garden-hand-left {
+  transform-origin: -10px -24px;
 }
-.crowd-nameplate {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  max-width: 100%;
-  min-height: 32px;
-  padding: 2px 8px;
-  border: 1px solid #dce3d3;
+.garden-actor[data-action="wave"] .garden-hand-right {
+  animation: garden-wave 0.6s ease-in-out infinite alternate;
+}
+.garden-actor[data-action="dance"] .garden-sprite-body {
+  animation: garden-dance 0.7s ease-in-out infinite alternate;
+}
+.garden-actor[data-action="dance"] .garden-hand-right {
+  transform: rotate(-110deg);
+}
+.garden-actor[data-action="dance"] .garden-hand-left {
+  transform: rotate(110deg);
+}
+.garden-actor[data-action="dance"] .garden-emote {
+  display: block;
+}
+.garden-actor[data-action="read"] .garden-book {
+  display: block;
+}
+.garden-actor[data-action="stretch"] .garden-hand-right {
+  transform: rotate(-160deg);
+}
+.garden-actor[data-action="stretch"] .garden-hand-left {
+  transform: rotate(160deg);
+}
+.garden-water {
+  animation: garden-water 1.4s steps(2, end) infinite;
+}
+.garden-lobby[data-paused="true"] *,
+.garden-lobby[data-paused="true"] *::before {
+  animation-play-state: paused !important;
+}
+.garden-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  font-size: 10px;
+  color: #738066;
+  line-height: 1.6;
+}
+.garden-caption > span:last-child {
+  color: #526b46;
+  white-space: nowrap;
+}
+.garden-empty {
+  position: absolute;
+  top: 28%;
+  left: 12%;
+  right: 12%;
+  padding: 18px;
+  text-align: center;
+  background: #fffdf0ed;
+  border: 1px solid #d8dfc5;
   border-radius: 12px;
-  background: #fffdf8;
-  color: var(--ink);
+  pointer-events: none;
+}
+.garden-empty strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 7px;
+}
+.garden-empty span {
+  font-size: 11px;
+  line-height: 1.7;
+  color: #6d7e5f;
+}
+.garden-roster {
+  border-top: 1px solid #e1e6d9;
+}
+.garden-roster summary {
+  cursor: pointer;
+  padding: 15px 18px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.garden-roster summary > span {
+  float: right;
+  font-size: 10px;
+  color: #7b866e;
+  font-weight: 400;
+}
+.garden-roster ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px 12px;
+  max-height: 290px;
+  overflow-y: auto;
+}
+.garden-roster li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #e6eadd;
+}
+.garden-find {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 5px;
+  flex: 1;
+  text-align: left;
   font-size: 12px;
 }
-.crowd-name { min-width: 0; overflow-wrap: anywhere; }
-.crowd-nameplate small { font-size: 9px; color: #647858; }
-.crowd-nameplate button {
-  min-width: 32px;
-  min-height: 36px;
+.garden-find > span:nth-child(2) {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.garden-find small {
+  color: #738066;
+  font-size: 9px;
+}
+.garden-roster-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
   flex-shrink: 0;
-  border-radius: 8px;
-  font-size: 17px;
 }
-.crowd-nameplate button:hover { background: #f4e4db; }
-.is-you .crowd-nameplate { border-color: #87a350; background: #f4f8e9; }
-.crowd-empty { padding: 36px 10px; font-size: 13px; }
-@keyframes crowd-wander {
-  0%, 100% { transform: translateX(-7px) rotate(-3deg); }
-  50% { transform: translateX(7px) rotate(3deg); }
+.garden-find[aria-pressed="true"] {
+  background: #edf3e3;
+  border-radius: 6px;
 }
-@keyframes crowd-hop {
-  0%, 30%, 65%, 100% { transform: translateY(0); }
-  40%, 55% { transform: translateY(-12px) rotate(3deg); }
-  47% { transform: translateY(-3px) rotate(-3deg); }
+.garden-remove {
+  min-height: 44px;
+  padding: 8px;
+  color: #a26350;
+  font-size: 10px;
 }
-@keyframes crowd-sway {
-  0%, 100% { transform: rotate(-7deg); }
-  50% { transform: rotate(7deg); }
+.garden-remove:hover {
+  color: #873f28;
+  text-decoration: underline;
 }
-@keyframes crowd-wave {
-  0%, 55%, 100% { transform: rotate(0); }
-  65%, 85% { transform: rotate(25deg); }
-  75%, 95% { transform: rotate(-15deg); }
+.garden-selected-person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  gap: 10px;
+  background: #edf3e3;
+  border-top: 1px solid #dce6ce;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.garden-selected-person button {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 19px;
+}
+.garden-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@keyframes garden-step {
+  from {
+    transform: translateY(-2px);
+  }
+  to {
+    transform: translateY(1px);
+  }
+}
+@keyframes garden-bob {
+  50% {
+    transform: translateY(-1px);
+  }
+}
+@keyframes garden-wave {
+  from {
+    transform: rotate(-110deg);
+  }
+  to {
+    transform: rotate(-155deg);
+  }
+}
+@keyframes garden-dance {
+  from {
+    transform: translateY(-3px) rotate(-7deg);
+  }
+  to {
+    transform: translateY(0) rotate(7deg);
+  }
+}
+@keyframes garden-water {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (max-width: 560px) {
+  .garden-toolbar {
+    padding: 14px 12px;
+  }
+  .garden-toolbar strong {
+    font-size: 12px;
+  }
+  .garden-toolbar small {
+    font-size: 9px;
+  }
+  .garden-caption {
+    padding: 11px 12px;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 9px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .crowd-character, .crowd-arm.right, .crowd-action-2 .crowd-arm.left { animation: none; }
+  .garden-lobby * {
+    animation: none !important;
+  }
 }
 .waiting {
   display: inline-block;
